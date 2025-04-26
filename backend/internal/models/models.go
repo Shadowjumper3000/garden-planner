@@ -31,7 +31,8 @@ type Plant struct {
 	GrowthCycle     datatypes.JSON           `gorm:"type:jsonb" json:"-"` // Stored as JSON in DB
 	Growth          *GrowthCycle             `gorm:"-" json:"growthCycle"`  // For JSON API interaction
 	CompatiblePlants datatypes.JSONSlice[string] `gorm:"type:text[]" json:"compatiblePlants"`
-	FertilizerNeed  float64                  `json:"-"` // Threshold for fertilizer alerts
+	CompanionBenefits string                 `json:"companionBenefits,omitempty"`
+	FertilizerNeed  float64                  `json:"fertilizerNeed"` // Threshold for fertilizer alerts
 }
 
 // PlantNutrients represents the impact a plant has on soil nutrients

@@ -1,4 +1,3 @@
-
 export interface Garden {
   id: string;
   name: string;
@@ -42,6 +41,7 @@ export interface Plant {
     potassiumImpact: number;
   };
   compatiblePlants: string[];
+  companionBenefits?: string;
   growthCycle: {
     germination: number; // days
     maturity: number; // days

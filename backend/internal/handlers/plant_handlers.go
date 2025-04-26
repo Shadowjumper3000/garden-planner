@@ -23,6 +23,7 @@ type CreatePlantRequest struct {
 	Nutrients       models.PlantNutrients   `json:"nutrients" binding:"required"`
 	GrowthCycle     models.GrowthCycle      `json:"growthCycle" binding:"required"`
 	CompatiblePlants []string               `json:"compatiblePlants"`
+	CompanionBenefits string                `json:"companionBenefits"`
 	FertilizerNeed  float64                 `json:"fertilizerNeed"`
 }
 
@@ -120,16 +121,17 @@ func (h *PlantHandler) CreatePlant(c *gin.Context) {
 
 	// Create new plant
 	plant := models.Plant{
-		ID:              uuid.New(),
-		Name:            req.Name,
-		ImageURL:        req.ImageURL,
-		Description:     req.Description,
-		NutrientImpact:  nutrientJSON,
-		Nutrients:       &req.Nutrients, // For the response
-		GrowthCycle:     growthJSON,
-		Growth:          &req.GrowthCycle, // For the response
+		ID:               uuid.New(),
+		Name:             req.Name,
+		ImageURL:         req.ImageURL,
+		Description:      req.Description,
+		NutrientImpact:   nutrientJSON,
+		Nutrients:        &req.Nutrients, // For the response
+		GrowthCycle:      growthJSON,
+		Growth:           &req.GrowthCycle, // For the response
 		CompatiblePlants: req.CompatiblePlants,
-		FertilizerNeed:  req.FertilizerNeed,
+		CompanionBenefits: req.CompanionBenefits,
+		FertilizerNeed:   req.FertilizerNeed,
 	}
 
 	// Save to database

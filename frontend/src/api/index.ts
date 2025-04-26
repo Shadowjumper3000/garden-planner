@@ -60,13 +60,32 @@ export const gardenAPI = {
     return response.data;
   },
   
+  update: async (id: string, garden: Partial<Omit<Garden, 'id' | 'createdAt' | 'soilData' | 'plants'>>): Promise<Garden> => {
+    const response = await api.put(`/gardens/${id}`, garden);
+    return response.data;
+  },
+  
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/gardens/${id}`);
+  },
+  
   updateSoil: async (id: string, soilData: SoilData): Promise<Garden> => {
     const response = await api.patch(`/gardens/${id}/soil`, { soilData });
     return response.data;
   },
   
   addPlant: async (gardenId: string, plantPlacement: Omit<Garden['plants'][0], 'id'>): Promise<Garden> => {
-    const response = await api.post(`/gardens/${gardenId}/plants`, plantPlacement);
+    // Format the data according to the backend AddPlantRequest structure
+    const formattedData = {
+      plantId: plantPlacement.plantId,
+      date: plantPlacement.plantedDate ? new Date(plantPlacement.plantedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      position: {
+        row: plantPlacement.position.row,
+        col: plantPlacement.position.col
+      }
+    };
+    
+    const response = await api.post(`/gardens/${gardenId}/plants`, formattedData);
     return response.data;
   },
   

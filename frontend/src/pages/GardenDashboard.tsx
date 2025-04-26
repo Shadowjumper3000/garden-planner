@@ -10,12 +10,26 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem 
 } from "@/components/ui/dropdown-menu";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Garden, Plant, PlantingEvent, SoilCell } from "@/types";
+import { Garden, Plant, PlantingEvent, SoilCell, PlantPlacement } from "@/types";
 import { gardenAPI, plantAPI } from "@/api";
 import { CalendarDays, Edit, Leaf, Sprout, ChevronDown } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 // Import DnD components conditionally to prevent build failures
 let DndProvider: any;
@@ -243,7 +257,7 @@ const DraggablePlant = ({ plant }: { plant: Plant }) => {
       className={`plant-item cursor-grab ${isDragging ? "opacity-50" : ""}`}
     >
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full overflow-hidden bg-garden-secondary/10">
+        <div className="w-10 h-10 rounded-full overflow-hidden bg-garden-secondary/10 flex items-center justify-center">
           {plant.imageUrl ? (
             <img 
               src={plant.imageUrl} 
@@ -256,9 +270,7 @@ const DraggablePlant = ({ plant }: { plant: Plant }) => {
               }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Sprout className="h-5 w-5 text-garden-secondary" />
-            </div>
+            <Sprout className="h-5 w-5 text-garden-secondary" />
           )}
         </div>
         <div>
@@ -493,6 +505,47 @@ const GardenDashboard = () => {
   const [plantPlacements, setPlantPlacements] = useState<Map<string, { plant: Plant }>>(new Map());
   const [events, setEvents] = useState<PlantingEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const editGardenSchema = z.object({
+    name: z.string().min(1, "Garden name is required"),
+    rows: z.number().min(1, "Rows must be at least 1").max(100, "Rows cannot exceed 100"),
+    columns: z.number().min(1, "Columns must be at least 1").max(100, "Columns cannot exceed 100"),
+    defaultMoisture: z.number().min(0, "Moisture cannot be negative").max(100, "Moisture cannot exceed 100%"),
+    defaultNitrogen: z.number().min(0, "Nitrogen cannot be negative").max(100, "Nitrogen cannot exceed 100%"),
+    defaultPhosphorus: z.number().min(0, "Phosphorus cannot be negative").max(100, "Phosphorus cannot exceed 100%"),
+    defaultPotassium: z.number().min(0, "Potassium cannot be negative").max(100, "Potassium cannot exceed 100%"),
+    defaultPh: z.number().min(0, "pH cannot be negative").max(14, "pH cannot exceed 14"),
+  });
+
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+    resolver: zodResolver(editGardenSchema),
+    defaultValues: {
+      name: garden?.name || "",
+      rows: garden?.rows || 10,
+      columns: garden?.columns || 10,
+      defaultMoisture: 50,
+      defaultNitrogen: 50,
+      defaultPhosphorus: 50,
+      defaultPotassium: 50,
+      defaultPh: 7,
+    },
+  });
+
+  const calculateAverageSoilProperty = (soilData: SoilCell[][], property: keyof SoilCell) => {
+    let sum = 0;
+    let count = 0;
+    
+    soilData.forEach(row => {
+      row.forEach(cell => {
+        sum += cell[property] as number;
+        count += 1;
+      });
+    });
+    
+    return count > 0 ? Math.round((sum / count) * 10) / 10 : 0;
+  };
 
   useEffect(() => {
     const loadGardenData = async () => {
@@ -592,7 +645,7 @@ const GardenDashboard = () => {
         row,
         col
       },
-      plantedDate: new Date().toISOString().split('T')[0] // This field name matches the type definition
+      plantedDate: new Date().toISOString().split('T')[0]  // Using plantedDate to match the type
     };
     
     try {
@@ -671,6 +724,52 @@ const GardenDashboard = () => {
     }
   };
 
+  const handleEditGarden = async (data: { 
+    name: string; 
+    rows: number; 
+    columns: number;
+    defaultMoisture: number;
+    defaultNitrogen: number;
+    defaultPhosphorus: number;
+    defaultPotassium: number;
+    defaultPh: number;
+  }) => {
+    try {
+      const updatedGarden = await gardenAPI.update(gardenId!, data);
+      setGarden(updatedGarden);
+      toast({
+        title: "Garden Updated",
+        description: "Your garden has been successfully updated.",
+      });
+      setIsEditDialogOpen(false);
+    } catch (error) {
+      console.error("Error updating garden:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update garden.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteGarden = async () => {
+    try {
+      await gardenAPI.delete(gardenId!);
+      toast({
+        title: "Garden Deleted",
+        description: "Your garden has been successfully deleted.",
+      });
+      navigate('/'); // Navigate back to home page
+    } catch (error) {
+      console.error("Error deleting garden:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete garden.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading || !garden) {
     return (
       <Layout>
@@ -693,7 +792,27 @@ const GardenDashboard = () => {
               {garden.rows}×{garden.columns} garden grid • Last updated {new Date(garden.soilData.lastUpdated).toLocaleDateString()}
             </p>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => {
+            // Prefill form with current garden values
+            setValue("name", garden.name);
+            setValue("rows", garden.rows);
+            setValue("columns", garden.columns);
+            
+            // Set soil default properties from the garden data
+            const avgMoisture = calculateAverageSoilProperty(garden.soilData.cells, 'moisture');
+            const avgNitrogen = calculateAverageSoilProperty(garden.soilData.cells, 'nitrogen');
+            const avgPhosphorus = calculateAverageSoilProperty(garden.soilData.cells, 'phosphorus');
+            const avgPotassium = calculateAverageSoilProperty(garden.soilData.cells, 'potassium');
+            const avgPh = calculateAverageSoilProperty(garden.soilData.cells, 'ph');
+            
+            setValue("defaultMoisture", avgMoisture);
+            setValue("defaultNitrogen", avgNitrogen);
+            setValue("defaultPhosphorus", avgPhosphorus);
+            setValue("defaultPotassium", avgPotassium);
+            setValue("defaultPh", avgPh);
+            
+            setIsEditDialogOpen(true);
+          }}>
             <Edit className="h-4 w-4 mr-2" />
             Edit Garden
           </Button>
@@ -803,6 +922,146 @@ const GardenDashboard = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md md:max-w-lg" style={{ resize: 'none' }}>
+          <DialogHeader>
+            <DialogTitle>Edit Garden</DialogTitle>
+            <DialogDescription>
+              Update the garden name and soil properties.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(handleEditGarden)}>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Garden Name</Label>
+                <Input id="name" {...register("name")} />
+                {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>}
+              </div>
+              
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-medium mb-2">Soil Default Properties</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="defaultMoisture">Moisture (%)</Label>
+                    <Input 
+                      id="defaultMoisture" 
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      {...register("defaultMoisture", { valueAsNumber: true })} 
+                    />
+                    {errors.defaultMoisture && <p className="text-red-600 text-sm mt-1">{errors.defaultMoisture.message}</p>}
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="defaultNitrogen">Nitrogen (%)</Label>
+                    <Input 
+                      id="defaultNitrogen" 
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      {...register("defaultNitrogen", { valueAsNumber: true })} 
+                    />
+                    {errors.defaultNitrogen && <p className="text-red-600 text-sm mt-1">{errors.defaultNitrogen.message}</p>}
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="defaultPhosphorus">Phosphorus (%)</Label>
+                    <Input 
+                      id="defaultPhosphorus" 
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      {...register("defaultPhosphorus", { valueAsNumber: true })} 
+                    />
+                    {errors.defaultPhosphorus && <p className="text-red-600 text-sm mt-1">{errors.defaultPhosphorus.message}</p>}
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="defaultPotassium">Potassium (%)</Label>
+                    <Input 
+                      id="defaultPotassium" 
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      {...register("defaultPotassium", { valueAsNumber: true })} 
+                    />
+                    {errors.defaultPotassium && <p className="text-red-600 text-sm mt-1">{errors.defaultPotassium.message}</p>}
+                  </div>
+                  
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="defaultPh">pH Level (0-14): {watch("defaultPh")}</Label>
+                    <div className="mt-2">
+                      <Slider
+                        id="defaultPh"
+                        min={0}
+                        max={14}
+                        step={0.1}
+                        className="py-1"
+                        value={[watch("defaultPh")]}
+                        onValueChange={([value]) => setValue("defaultPh", value)}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>Acidic (0-6)</span>
+                      <span>Neutral (7)</span>
+                      <span>Alkaline (8-14)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2 mt-6">
+              <Button 
+                type="button" 
+                variant="destructive"
+                onClick={() => {
+                  setIsEditDialogOpen(false);
+                  setDeleteConfirmOpen(true);
+                }}
+              >
+                Delete Garden
+              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+                <Button type="submit">Save Changes</Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-sm" style={{ resize: 'none' }}>
+          <DialogHeader>
+            <DialogTitle>Delete Garden</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this garden? All plants and data will be permanently lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+              className="sm:flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteGarden}
+              className="sm:flex-1"
+            >
+              Delete Garden
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

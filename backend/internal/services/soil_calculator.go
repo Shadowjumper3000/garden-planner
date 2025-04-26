@@ -313,8 +313,14 @@ func (sc *SoilCalculator) UpdateGardenWithPlant(gardenID uuid.UUID, plantID uuid
 		return nil, fmt.Errorf("could not marshal updated soil data: %w", err)
 	}
 
-	// Update the garden soil data
-	if err := tx.Model(&garden).Update("soil_data", updatedSoilJSON).Error; err != nil {
+	// Debug logging to inspect the JSON data
+	fmt.Printf("DEBUG: Updating soil data for garden %s\n", gardenID)
+	fmt.Printf("DEBUG: JSON length: %d bytes\n", len(updatedSoilJSON))
+	fmt.Printf("DEBUG: Position: row=%d, col=%d\n", position.Row, position.Col)
+	
+	// Use a raw SQL query with a parameter placeholder to avoid JSON escaping issues
+	if err := tx.Exec("UPDATE gardens SET soil_data = ?, updated_at = ? WHERE id = ?", 
+		string(updatedSoilJSON), time.Now(), gardenID).Error; err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("could not update garden soil data: %w", err)
 	}
