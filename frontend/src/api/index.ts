@@ -90,9 +90,8 @@ export const gardenAPI = {
   },
   
   removePlant: async (gardenId: string, row: number, col: number): Promise<Garden> => {
-    const response = await api.delete(`/gardens/${gardenId}/plants`, { 
-      data: { position: { row, col } }
-    });
+    // Use a more RESTful URL structure with query parameters
+    const response = await api.delete(`/gardens/${gardenId}/plants?row=${row}&col=${col}`);
     return response.data;
   }
 };

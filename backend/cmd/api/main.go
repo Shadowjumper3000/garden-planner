@@ -107,6 +107,7 @@ func main() {
 		protected.POST("/gardens", gardenHandler.CreateGarden)
 		protected.GET("/gardens/:id", gardenHandler.GetGardenByID)
 		protected.POST("/gardens/:id/plants", gardenHandler.AddPlant)
+		protected.DELETE("/gardens/:id/plants", gardenHandler.RemovePlant)
 		protected.GET("/gardens/:id/soil", gardenHandler.GetSoilData)
 		protected.GET("/gardens/:id/future-soil", gardenHandler.GetFutureSoil)
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -303,6 +304,134 @@ func (h *GardenHandler) AddPlant(c *gin.Context) {
 	
 	// Load plants for the garden
 	var placements []models.PlantPlacement
+	if err := h.DB.Where("garden_id = ?", updatedGarden.ID).Find(&placements).Error; err == nil {
+		// Parse position for each plant placement
+		for i := range placements {
+			var pos models.Position
+			if err := json.Unmarshal(placements[i].Position, &pos); err == nil {
+				placements[i].Pos = &pos
+			}
+		}
+		updatedGarden.Plants = placements
+	}
+
+	c.JSON(http.StatusOK, updatedGarden)
+}
+
+// RemovePlant removes a plant from a garden based on position
+func (h *GardenHandler) RemovePlant(c *gin.Context) {
+	// Get the garden ID from the URL parameter
+	gardenIDStr := c.Param("id")
+	gardenID, err := uuid.Parse(gardenIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid garden ID format"})
+		return
+	}
+
+	// Get position from query parameters
+	rowStr := c.Query("row")
+	colStr := c.Query("col")
+
+	row, err := strconv.Atoi(rowStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid row parameter"})
+		return
+	}
+
+	col, err := strconv.Atoi(colStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid col parameter"})
+		return
+	}
+
+	// Get user ID from context (set by auth middleware)
+	userIDStr, exists := c.Get("userId")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
+
+	// Parse user ID
+	userID, err := uuid.Parse(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	// Verify garden ownership
+	var garden models.Garden
+	if err := h.DB.Where("id = ? AND user_id = ?", gardenID, userID).First(&garden).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Garden not found or not authorized"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not verify garden ownership"})
+		}
+		return
+	}
+
+	// Start a transaction
+	tx := h.DB.Begin()
+	if err := tx.Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not start transaction"})
+		return
+	}
+
+	// Get all plant placements for this garden to find the matching one
+	var placements []models.PlantPlacement
+	if err := tx.Where("garden_id = ?", gardenID).Find(&placements).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch plant placements"})
+		return
+	}
+
+	// Find the placement with the matching position
+	var targetPlacement *models.PlantPlacement
+	for i := range placements {
+		var pos models.Position
+		if err := json.Unmarshal(placements[i].Position, &pos); err == nil {
+			if pos.Row == row && pos.Col == col {
+				targetPlacement = &placements[i]
+				break
+			}
+		}
+	}
+
+	if targetPlacement == nil {
+		tx.Rollback()
+		c.JSON(http.StatusNotFound, gin.H{"error": "No plant found at that position"})
+		return
+	}
+
+	// Delete the found plant placement
+	if err := tx.Delete(targetPlacement).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not remove plant: " + err.Error()})
+		return
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not commit transaction"})
+		return
+	}
+
+	// Get the updated garden with plants
+	var updatedGarden models.Garden
+	if err := h.DB.First(&updatedGarden, "id = ?", gardenID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch updated garden"})
+		return
+	}
+
+	// Parse soil data
+	if updatedGarden.SoilData != nil {
+		var soilData models.GardenSoilData
+		if err := json.Unmarshal(updatedGarden.SoilData, &soilData); err == nil {
+			updatedGarden.Soil = &soilData
+		}
+	}
+
+	// Load plants for the garden
+	placements = []models.PlantPlacement{}
 	if err := h.DB.Where("garden_id = ?", updatedGarden.ID).Find(&placements).Error; err == nil {
 		// Parse position for each plant placement
 		for i := range placements {
