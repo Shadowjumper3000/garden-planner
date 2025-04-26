@@ -250,40 +250,73 @@ func (sc *SoilCalculator) UpdateGardenWithPlant(gardenID uuid.UUID, plantID uuid
 		return nil, fmt.Errorf("could not parse soil data: %w", err)
 	}
 
-	// Update the soil data at the plant's position if valid
-	if position.Row >= 0 && position.Row < len(soilData.Cells) &&
-		position.Col >= 0 && position.Col < len(soilData.Cells[0]) {
-		// Parse the nutrient impact
-		var nutrients models.PlantNutrients
-		if err := json.Unmarshal(plant.NutrientImpact, &nutrients); err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("could not parse nutrient data: %w", err)
+	// Validate that soilData.Cells exists and has content
+	if len(soilData.Cells) == 0 {
+		fmt.Printf("Warning: garden %s has no soil cells data\n", gardenID)
+		// Initialize with default values if empty
+		soilData.Cells = make([][]models.SoilCell, garden.Rows)
+		for i := range soilData.Cells {
+			soilData.Cells[i] = make([]models.SoilCell, garden.Columns)
+			for j := range soilData.Cells[i] {
+				soilData.Cells[i][j] = models.SoilCell{
+					Moisture:   50,
+					Nitrogen:   50,
+					Phosphorus: 50,
+					Potassium:  50,
+					PH:         7,
+				}
+			}
 		}
+	}
 
-		// Apply the immediate effect of planting
-		soilData.Cells[position.Row][position.Col].Nitrogen += float64(nutrients.NitrogenImpact) * 0.1
-		soilData.Cells[position.Row][position.Col].Phosphorus += float64(nutrients.PhosphorusImpact) * 0.1
-		soilData.Cells[position.Row][position.Col].Potassium += float64(nutrients.PotassiumImpact) * 0.1
-
-		// Clamp values to valid range
-		soilData.Cells[position.Row][position.Col].Nitrogen = clamp(soilData.Cells[position.Row][position.Col].Nitrogen, 0, 100)
-		soilData.Cells[position.Row][position.Col].Phosphorus = clamp(soilData.Cells[position.Row][position.Col].Phosphorus, 0, 100)
-		soilData.Cells[position.Row][position.Col].Potassium = clamp(soilData.Cells[position.Row][position.Col].Potassium, 0, 100)
-
-		soilData.LastUpdated = time.Now()
-
-		// Marshal the updated soil data
-		updatedSoilJSON, err := json.Marshal(soilData)
-		if err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("could not marshal updated soil data: %w", err)
+	// Validate position is within garden bounds
+	if position.Row < 0 || position.Col < 0 || 
+	   position.Row >= len(soilData.Cells) || 
+	   (len(soilData.Cells) > 0 && position.Col >= len(soilData.Cells[0])) {
+		tx.Rollback()
+		colLength := 0
+		if len(soilData.Cells) > 0 {
+			colLength = len(soilData.Cells[0])
 		}
+		return nil, fmt.Errorf("invalid position: row %d, col %d is outside garden bounds of %dx%d", 
+			position.Row, position.Col, len(soilData.Cells), colLength)
+	}
 
-		// Update the garden soil data
-		if err := tx.Model(&garden).Update("soil_data", updatedSoilJSON).Error; err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("could not update garden soil data: %w", err)
-		}
+	// Parse the nutrient impact with error handling
+	var nutrients models.PlantNutrients
+	if plant.NutrientImpact == nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("plant has no nutrient impact data")
+	}
+
+	if err := json.Unmarshal(plant.NutrientImpact, &nutrients); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("could not parse nutrient data: %w", err)
+	}
+
+	// Apply the immediate effect of planting
+	soilData.Cells[position.Row][position.Col].Nitrogen += float64(nutrients.NitrogenImpact) * 0.1
+	soilData.Cells[position.Row][position.Col].Phosphorus += float64(nutrients.PhosphorusImpact) * 0.1
+	soilData.Cells[position.Row][position.Col].Potassium += float64(nutrients.PotassiumImpact) * 0.1
+
+	// Clamp values to valid range
+	soilData.Cells[position.Row][position.Col].Nitrogen = clamp(soilData.Cells[position.Row][position.Col].Nitrogen, 0, 100)
+	soilData.Cells[position.Row][position.Col].Phosphorus = clamp(soilData.Cells[position.Row][position.Col].Phosphorus, 0, 100)
+	soilData.Cells[position.Row][position.Col].Potassium = clamp(soilData.Cells[position.Row][position.Col].Potassium, 0, 100)
+
+	soilData.LastUpdated = time.Now()
+
+	// Marshal the updated soil data
+	updatedSoilJSON, err := json.Marshal(soilData)
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("could not marshal updated soil data: %w", err)
+	}
+
+	// Update the garden soil data
+	if err := tx.Model(&garden).Update("soil_data", updatedSoilJSON).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("could not update garden soil data: %w", err)
 	}
 
 	// Commit the transaction

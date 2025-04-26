@@ -64,7 +64,7 @@ func LoadConfig() *Config {
 			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 		},
 		JWT: JWTConfig{
-			Secret:     getEnv("JWT_SECRET", "your-secret-key"),
+			Secret:     getEnvWithRequiredCheck("JWT_SECRET", "your-secret-key", "production"),
 			Expiration: time.Duration(getEnvAsInt("JWT_EXPIRATION_HOURS", 24)) * time.Hour,
 		},
 		CORS: CORSConfig{
@@ -121,4 +121,16 @@ func getEnvAsSlice(key string, defaultValue []string) []string {
 	}
 	
 	return strings.Split(valueStr, ",")
+}
+
+// Get an environment variable with a required check for production
+func getEnvWithRequiredCheck(key, defaultValue, environment string) string {
+	if environment == "production" {
+		value, exists := os.LookupEnv(key)
+		if !exists || value == "" {
+			panic(fmt.Sprintf("Environment variable %s is required in production", key))
+		}
+		return value
+	}
+	return getEnv(key, defaultValue)
 }

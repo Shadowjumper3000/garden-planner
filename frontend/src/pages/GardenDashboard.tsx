@@ -1,16 +1,21 @@
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuTrigger,
+  DropdownMenuItem 
+} from "@/components/ui/dropdown-menu";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Garden, Plant, PlantingEvent, SoilCell } from "@/types";
-import { gardenAPI, getMockGardens, getMockPlants } from "@/api";
-import { CalendarDays, Edit, Leaf, Sprout } from "lucide-react";
+import { gardenAPI, plantAPI } from "@/api";
+import { CalendarDays, Edit, Leaf, Sprout, ChevronDown } from "lucide-react";
 
 // Import DnD components conditionally to prevent build failures
 let DndProvider: any;
@@ -19,13 +24,18 @@ let useDrop: any;
 let HTML5Backend: any;
 
 try {
-  // Dynamic imports for DnD
-  const dndImport = require("react-dnd");
-  const backendImport = require("react-dnd-html5-backend");
-  DndProvider = dndImport.DndProvider;
-  useDrag = dndImport.useDrag;
-  useDrop = dndImport.useDrop;
-  HTML5Backend = backendImport.HTML5Backend;
+  // Dynamic imports for DnD using ESM import syntax
+  Promise.all([
+    import("react-dnd"),
+    import("react-dnd-html5-backend")
+  ]).then(([dndImport, backendImport]) => {
+    DndProvider = dndImport.DndProvider;
+    useDrag = dndImport.useDrag;
+    useDrop = dndImport.useDrop;
+    HTML5Backend = backendImport.HTML5Backend;
+  }).catch(error => {
+    console.warn("Failed to load react-dnd dependencies:", error);
+  });
 } catch (error) {
   console.warn("Failed to load react-dnd dependencies:", error);
   // Provide fallback implementations
@@ -35,31 +45,185 @@ try {
   HTML5Backend = {};
 }
 
-// Import FullCalendar components conditionally
-let FullCalendar: any;
-let dayGridPlugin: any;
-
-try {
-  // Dynamic imports for FullCalendar
-  FullCalendar = require("@fullcalendar/react").default;
-  dayGridPlugin = require("@fullcalendar/daygrid").default;
-} catch (error) {
-  console.warn("Failed to load FullCalendar dependencies:", error);
-  // Provide a fallback component
-  FullCalendar = ({ events }: { events: any[] }) => (
-    <div className="p-4 border rounded bg-gray-50">
-      <p className="text-center text-muted-foreground">Calendar unavailable</p>
-      <ul className="mt-4">
-        {events?.map((event) => (
-          <li key={event.id} className="py-1 border-b">
-            {event.title} - {event.start}
-          </li>
-        ))}
-      </ul>
+// Create a simple calendar component
+const SimpleCalendarComponent = ({ events }: { events: PlantingEvent[] }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
+  
+  // Get events for current month
+  const filteredEvents = events.filter(event => {
+    const eventDate = new Date(event.start);
+    return eventDate.getMonth() === currentDate.getMonth() && 
+           eventDate.getFullYear() === currentDate.getFullYear();
+  });
+  
+  // Helper to get all days in current month
+  const getDaysInMonth = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const days = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = new Date(year, month, i);
+      days.push({
+        date,
+        dayNumber: i,
+        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        events: filteredEvents.filter(event => 
+          new Date(event.start).toDateString() === date.toDateString()
+        )
+      });
+    }
+    return days;
+  };
+  
+  // Get current month days
+  const days = getDaysInMonth();
+  
+  // Get first day of month to calculate offset
+  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 for Sunday, 1 for Monday, etc.
+  
+  // Change month
+  const nextMonth = () => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + 1);
+    setCurrentDate(newDate);
+  };
+  
+  const prevMonth = () => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() - 1);
+    setCurrentDate(newDate);
+  };
+  
+  // Get to current month
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+  
+  return (
+    <div className="calendar-container">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex space-x-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={prevMonth}
+          >
+            Previous
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={goToToday}
+          >
+            Today
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={nextMonth}
+          >
+            Next
+          </Button>
+        </div>
+        <h2 className="text-xl font-medium">
+          {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </h2>
+        <div className="flex space-x-2">
+          <Button
+            variant={viewMode === 'month' ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode('month')}
+          >
+            Month
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode('list')}
+          >
+            List
+          </Button>
+        </div>
+      </div>
+      
+      {viewMode === 'month' ? (
+        <div>
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-center text-sm font-medium py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {/* Add empty cells for days before the first day of month */}
+            {Array.from({ length: firstDayOfWeek }).map((_, index) => (
+              <div key={`empty-${index}`} className="h-24 border rounded bg-gray-50 p-1"></div>
+            ))}
+            
+            {/* Render all days of the month */}
+            {days.map(({ date, dayNumber, events }) => (
+              <div 
+                key={dayNumber} 
+                className={`h-24 border rounded p-1 overflow-y-auto ${
+                  date.toDateString() === new Date().toDateString() ? 'bg-garden-primary/10' : ''
+                }`}
+              >
+                <div className="font-medium text-sm mb-1">{dayNumber}</div>
+                {events.map(event => (
+                  <div 
+                    key={event.id} 
+                    className={`text-xs p-1 mb-1 rounded truncate ${
+                      event.type === 'planting' ? 'bg-garden-primary/20' : 'bg-garden-accent/20'
+                    }`}
+                    title={event.title}
+                  >
+                    {event.title}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredEvents.length > 0 ? (
+            filteredEvents
+              .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+              .map(event => (
+                <div 
+                  key={event.id} 
+                  className={`p-2 rounded flex items-center space-x-2 ${
+                    event.type === 'planting' ? 'bg-garden-primary/10' : 'bg-garden-accent/10'
+                  }`}
+                >
+                  <div 
+                    className={`w-3 h-3 rounded-full ${
+                      event.type === 'planting' ? 'bg-garden-primary' : 'bg-garden-accent'
+                    }`}
+                  ></div>
+                  <div>
+                    <div className="font-medium">{event.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {new Date(event.start).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+              ))
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No events for {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
-  dayGridPlugin = {};
-}
+};
 
 const ITEM_TYPE = "PLANT";
 
@@ -122,13 +286,17 @@ const DroppableSoilCell = ({
   col, 
   soilCell, 
   onDrop, 
-  plantPlacement = null 
+  onRemovePlant,
+  plantPlacement = null,
+  plants
 }: { 
   row: number; 
   col: number; 
   soilCell: SoilCell; 
   onDrop: (row: number, col: number, plant: Plant) => void; 
+  onRemovePlant: (row: number, col: number) => void;
   plantPlacement?: { plant: Plant } | null;
+  plants: Plant[];
 }) => {
   const [{ isOver }, drop] = useDrop({
     accept: ITEM_TYPE,
@@ -158,16 +326,16 @@ const DroppableSoilCell = ({
   return (
     <div
       ref={drop}
-      className={`soil-cell ${isOver ? "ring-2 ring-garden-primary" : ""}`}
+      className={`soil-cell relative ${isOver ? "ring-2 ring-garden-primary" : ""} ${!plantPlacement && isOver ? "bg-garden-primary/10" : ""}`}
       style={{ backgroundColor: getNutrientColor() }}
     >
       {plantPlacement && (
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="w-full h-full flex items-center justify-center group">
           {plantPlacement.plant.imageUrl ? (
             <img 
               src={plantPlacement.plant.imageUrl} 
               alt={plantPlacement.plant.name} 
-              className="w-3/4 h-3/4 object-contain"
+              className="w-3/4 h-3/4 object-contain group-hover:opacity-80 transition-opacity"
               onError={(e) => {
                 // Handle image loading errors
                 e.currentTarget.style.display = 'none';
@@ -175,9 +343,60 @@ const DroppableSoilCell = ({
               }}
             />
           ) : (
-            <Leaf className="h-1/2 w-1/2 text-garden-secondary" />
+            <Leaf className="h-1/2 w-1/2 text-garden-secondary group-hover:opacity-80 transition-opacity" />
           )}
+          
+          {/* Plant info tooltip on hover */} 
+          <div className="absolute inset-0 bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-1 text-xs">
+            <p className="font-semibold">{plantPlacement.plant.name}</p>
+            <button 
+              onClick={() => onRemovePlant(row, col)} 
+              className="mt-1 bg-red-600 hover:bg-red-700 text-white px-1 py-0.5 rounded text-[10px]"
+            >
+              Remove
+            </button>
+          </div>
         </div>
+      )}
+      
+      {/* Dropdown menu for plant selection */}
+      {!plantPlacement && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-garden-primary/10">
+              <button className="bg-garden-primary text-white rounded-full w-6 h-6 flex items-center justify-center">+</button>
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="max-h-64 overflow-y-auto" align="center">
+            <div className="py-1 px-2 text-sm font-medium border-b">Select a plant:</div>
+            {plants.map((plant) => (
+              <DropdownMenuItem 
+                key={plant.id} 
+                onClick={() => onDrop(row, col, plant)}
+                className="flex items-center gap-2 py-2 cursor-pointer"
+              >
+                <div className="w-6 h-6 rounded-full overflow-hidden bg-garden-secondary/10 flex-shrink-0">
+                  {plant.imageUrl ? (
+                    <img 
+                      src={plant.imageUrl} 
+                      alt={plant.name} 
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center"><svg class="h-3 w-3 text-garden-secondary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9C4 4 7 3 10 3" /><path d="M8 14c-2 0-4-1-4-4" /><path d="M21 10c-1.7-1-3-1-5-1" /><path d="M8 10c0 3.5 6 4.5 8 1" /><path d="M19 9c.3 1.2 0 2.4-.7 3.9" /><path d="M21 15c-1 1-3 2-7 2s-6-1-7-2c-1.7 1.5-2 3-2 5h18c0-2-.4-3.5-2-5Z" /></svg></div>`;
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Sprout className="h-3 w-3 text-garden-secondary" />
+                    </div>
+                  )}
+                </div>
+                <span>{plant.name}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
@@ -285,46 +504,63 @@ const GardenDashboard = () => {
       try {
         setIsLoading(true);
         
-        // Load mock data for demo
-        const mockGardens = getMockGardens();
-        const foundGarden = mockGardens.find(g => g.id === gardenId);
+        // Use the real API to fetch garden data
+        const garden = await gardenAPI.getById(gardenId!);
+        setGarden(garden);
         
-        if (!foundGarden) {
-          toast({
-            title: "Garden not found",
-            description: "Could not find the requested garden.",
-            variant: "destructive",
-          });
-          navigate('/');
-          return;
+        // Use the real API to fetch plants
+        const plantsData = await plantAPI.getAll();
+        setPlants(plantsData);
+        
+        // Initialize plant placements from the garden data
+        const initialPlacements = new Map<string, { plant: Plant }>();
+        if (garden.plants && garden.plants.length > 0) {
+          for (const placement of garden.plants) {
+            const plant = plantsData.find(p => p.id === placement.plantId);
+            if (plant && placement.position) {
+              const cellKey = `${placement.position.row}-${placement.position.col}`;
+              initialPlacements.set(cellKey, { plant });
+            }
+          }
+        }
+        setPlantPlacements(initialPlacements);
+        
+        // Create calendar events from plant placements
+        const calendarEvents: PlantingEvent[] = [];
+        if (garden.plants && garden.plants.length > 0) {
+          for (const placement of garden.plants) {
+            const plant = plantsData.find(p => p.id === placement.plantId);
+            if (plant) {
+              // Add planting event
+              calendarEvents.push({
+                id: `planting-${placement.plantId}-${Date.now()}`,
+                title: `Plant ${plant.name}`,
+                start: new Date(placement.plantedDate).toISOString().split('T')[0],
+                plantId: plant.id,
+                gardenId: garden.id,
+                type: 'planting',
+                color: '#4B7F52',
+              });
+              
+              // Calculate and add harvest event
+              const plantDate = new Date(placement.plantedDate);
+              const harvestDate = new Date(plantDate);
+              harvestDate.setDate(plantDate.getDate() + plant.growthCycle.harvest);
+              
+              calendarEvents.push({
+                id: `harvest-${placement.plantId}-${Date.now()}`,
+                title: `Harvest ${plant.name}`,
+                start: harvestDate.toISOString().split('T')[0],
+                plantId: plant.id,
+                gardenId: garden.id,
+                type: 'harvest',
+                color: '#f97316',
+              });
+            }
+          }
         }
         
-        setGarden(foundGarden);
-        
-        // Load plants
-        const mockPlants = getMockPlants();
-        setPlants(mockPlants);
-        
-        // Create some mock calendar events
-        const mockEvents: PlantingEvent[] = mockPlants.slice(0, 3).map((plant, i) => ({
-          id: `event-${i}`,
-          title: `Plant ${plant.name}`,
-          start: new Date(Date.now() + i * 86400000 * 3).toISOString().split('T')[0],
-          plantId: plant.id,
-          gardenId: foundGarden.id,
-          type: 'planting',
-          color: '#4B7F52',
-        }));
-        
-        setEvents(mockEvents);
-        
-        // Simulate some initial plantings
-        const initialPlacements = new Map<string, { plant: Plant }>();
-        mockPlants.slice(0, 2).forEach((plant, i) => {
-          initialPlacements.set(`1-${i+2}`, { plant });
-        });
-        
-        setPlantPlacements(initialPlacements);
+        setEvents(calendarEvents);
       } catch (error) {
         console.error("Error loading garden:", error);
         toast({
@@ -332,6 +568,7 @@ const GardenDashboard = () => {
           description: "Failed to load garden data.",
           variant: "destructive",
         });
+        navigate('/');
       } finally {
         setIsLoading(false);
       }
@@ -340,7 +577,7 @@ const GardenDashboard = () => {
     loadGardenData();
   }, [gardenId, isAuthenticated, navigate, toast]);
 
-  const handlePlantDrop = (row: number, col: number, plant: Plant) => {
+  const handlePlantDrop = async (row: number, col: number, plant: Plant) => {
     const cellKey = `${row}-${col}`;
     
     // Make a new Map to trigger re-render
@@ -348,23 +585,90 @@ const GardenDashboard = () => {
     newPlacements.set(cellKey, { plant });
     setPlantPlacements(newPlacements);
     
-    // Add a planting event to the calendar
-    const newEvent: PlantingEvent = {
-      id: `event-${Date.now()}`,
-      title: `Planted ${plant.name}`,
-      start: new Date().toISOString().split('T')[0],
+    // Create plant placement data for the API
+    const plantPlacement = {
       plantId: plant.id,
-      gardenId: gardenId || '',
-      type: 'planting',
-      color: '#4B7F52',
+      position: {
+        row,
+        col
+      },
+      plantedDate: new Date().toISOString().split('T')[0] // This field name matches the type definition
     };
     
-    setEvents([...events, newEvent]);
+    try {
+      // Use the real API to add the plant to the garden
+      const updatedGarden = await gardenAPI.addPlant(gardenId!, plantPlacement);
+      
+      // Add a planting event to the calendar
+      const newEvent: PlantingEvent = {
+        id: `event-${Date.now()}`,
+        title: `Planted ${plant.name}`,
+        start: new Date().toISOString().split('T')[0],
+        plantId: plant.id,
+        gardenId: gardenId || '',
+        type: 'planting',
+        color: '#4B7F52',
+      };
+      
+      setEvents([...events, newEvent]);
+      
+      toast({
+        title: "Plant Added",
+        description: `${plant.name} has been planted at position (${row+1}, ${col+1}).`,
+      });
+      
+      // Check if the garden was updated and contains the new plant data
+      // This helps ensure the UI stays in sync with the backend
+      if (updatedGarden && updatedGarden.plants) {
+        // Refresh garden data to ensure we have latest state
+        setGarden(updatedGarden);
+      }
+      
+    } catch (error) {
+      console.error("Error adding plant to garden:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add plant to garden.",
+        variant: "destructive",
+      });
+      
+      // Remove the plant from the UI if the API call failed
+      newPlacements.delete(cellKey);
+      setPlantPlacements(newPlacements);
+    }
+  };
+
+  const handleRemovePlant = async (row: number, col: number) => {
+    const cellKey = `${row}-${col}`;
     
-    toast({
-      title: "Plant Added",
-      description: `${plant.name} has been planted at position (${row+1}, ${col+1}).`,
-    });
+    // Make a new Map to trigger re-render
+    const newPlacements = new Map(plantPlacements);
+    newPlacements.delete(cellKey);
+    setPlantPlacements(newPlacements);
+    
+    try {
+      // Use the real API to remove the plant from the garden
+      await gardenAPI.removePlant(gardenId!, row, col);
+      
+      toast({
+        title: "Plant Removed",
+        description: `Plant at position (${row+1}, ${col+1}) has been removed.`,
+      });
+    } catch (error) {
+      console.error("Error removing plant from garden:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove plant from garden.",
+        variant: "destructive",
+      });
+      
+      // Re-add the plant to the UI if the API call failed
+      const plant = plantPlacements.get(cellKey)?.plant;
+      if (plant) {
+        newPlacements.set(cellKey, { plant });
+        setPlantPlacements(newPlacements);
+      }
+    }
   };
 
   if (isLoading || !garden) {
@@ -441,7 +745,9 @@ const GardenDashboard = () => {
                                   ph: 7,
                                 }}
                                 onDrop={handlePlantDrop}
+                                onRemovePlant={handleRemovePlant}
                                 plantPlacement={placement}
+                                plants={plants}
                               />
                             );
                           })
@@ -461,17 +767,7 @@ const GardenDashboard = () => {
                     <CardTitle className="text-lg font-serif">Planting Calendar</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <FullCalendar
-                      plugins={[dayGridPlugin]}
-                      initialView="dayGridMonth"
-                      headerToolbar={{
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth'
-                      }}
-                      height="auto"
-                      events={events}
-                    />
+                    <SimpleCalendarComponent events={events} />
                   </CardContent>
                 </Card>
               </TabsContent>

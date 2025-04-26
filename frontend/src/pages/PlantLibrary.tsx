@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
@@ -11,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plant } from "@/types";
-import { plantAPI, getMockPlants } from "@/api";
+import { plantAPI } from "@/api";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -40,7 +39,7 @@ const PlantLibrary = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Fetch plants or use mock data
+  // Fetch plants using the real API
   const { data: plants = [], isLoading, refetch } = useQuery({
     queryKey: ["plants"],
     queryFn: async () => {
@@ -50,9 +49,8 @@ const PlantLibrary = () => {
           return [];
         }
         
-        // In a real app, this would call plantAPI.getAll()
-        // For demo, we'll use mock data
-        return getMockPlants();
+        // Use the real API to fetch plants instead of mock data
+        return await plantAPI.getAll();
       } catch (error) {
         console.error("Error fetching plants:", error);
         return [];
@@ -77,11 +75,8 @@ const PlantLibrary = () => {
   
   const onAddPlant = async (data: AddPlantFormValues) => {
     try {
-      // In a real app, this would call plantAPI.create()
-      console.log("Creating plant:", data);
-      
-      const newPlant: Plant = {
-        id: `plant-${Date.now()}`,
+      // Create plant payload for the API
+      const newPlant: Omit<Plant, 'id'> = {
         name: data.name,
         imageUrl: data.imageUrl || undefined,
         description: data.description,
@@ -98,6 +93,9 @@ const PlantLibrary = () => {
         }
       };
       
+      // Use the real API to create a plant
+      await plantAPI.create(newPlant);
+      
       toast({
         title: "Plant Added",
         description: `${data.name} has been added to your plant library.`,
@@ -105,7 +103,7 @@ const PlantLibrary = () => {
       
       setIsDialogOpen(false);
       reset();
-      refetch(); // In a real app, this would update the plants list
+      refetch(); // In a real app, this will update the plants list
     } catch (error) {
       console.error("Error creating plant:", error);
       toast({

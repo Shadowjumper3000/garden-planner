@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 import { Button } from "./ui/button";
@@ -22,7 +21,7 @@ const Layout = ({ children }: LayoutProps) => {
           
           <nav className="hidden md:flex items-center space-x-6">
             <Link to="/" className="hover:text-garden-light transition-colors">
-              Home
+              {isAuthenticated ? "My Gardens" : "Home"}
             </Link>
             {isAuthenticated && (
               <>

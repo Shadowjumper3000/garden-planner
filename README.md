@@ -30,26 +30,68 @@ A full-stack garden planning application with time-aware soil simulation and pla
 
 1. Clone the repository
 
-2. Start the development environment:
+2. Create a development environment file:
+   ```bash
+   cp .env.example .env.development
+   ```
+   
+   Adjust the values in `.env.development` as needed.
 
-```bash
-docker-compose -f docker-compose.dev.yml up
-```
+3. Generate SSL certificates for development (optional):
+   ```bash
+   ./scripts/generate-ssl-certs.sh
+   ```
 
-This will start:
-- PostgreSQL database on port 5432
-- Go backend API on port 8080
-- React frontend on port 3000
+4. Start the development environment:
+   ```bash
+   docker-compose -f docker-compose.dev.yml up
+   ```
 
-3. Access the application:
+   This will start:
+   - PostgreSQL database on port 5432
+   - Go backend API on port 8080
+   - React frontend on port 3000
+
+5. Access the application:
    - Frontend: http://localhost:3000
    - API: http://localhost:8080
 
-### Running in Production Mode
+### Production Deployment
 
-```bash
-docker-compose up -d
-```
+1. Set up your production environment variables:
+   ```bash
+   cp .env.example .env
+   ```
+   
+   **IMPORTANT**: Be sure to change the following values for production:
+   - `POSTGRES_PASSWORD`: Use a strong password
+   - `JWT_SECRET`: Set to a long, random string
+   - `CORS_ALLOW_ORIGINS`: Set to your production domain(s)
+
+2. Set up SSL certificates:
+   - For production, you should use certificates from a trusted Certificate Authority
+   - Place them in the `./ssl/` directory or adjust the path in your `.env` file
+
+3. Deploy with Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Access your production application:
+   - Frontend: https://yourdomain.com
+   - API: https://yourdomain.com/api (proxied through the frontend)
+
+### System Requirements
+
+#### Minimum Requirements
+- 1 CPU core
+- 2GB RAM
+- 10GB storage
+
+#### Recommended Requirements
+- 2+ CPU cores
+- 4GB+ RAM
+- 20GB+ SSD storage
 
 ## API Endpoints
 
@@ -87,23 +129,62 @@ docker-compose up -d
 │   │   └── services/      # Business logic
 │   └── migrations/        # SQL migrations
 ├── frontend/              # React frontend code
-└── docker-compose.yml     # Production Docker configuration
+├── scripts/               # Utility scripts
+├── ssl/                   # SSL certificates (not included in repository)
+├── docker-compose.yml     # Production Docker configuration
+└── docker-compose.dev.yml # Development Docker configuration
 ```
 
 ## Environment Variables
 
 ### Backend
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| SERVER_PORT | API server port | 8080 |
-| DB_HOST | Database hostname | postgres |
-| DB_PORT | Database port | 5432 |
-| DB_USER | Database username | postgres |
-| DB_PASSWORD | Database password | postgres |
-| DB_NAME | Database name | garden_planner |
-| JWT_SECRET | JWT signing secret | (required in production) |
-| CORS_ALLOW_ORIGINS | Allowed origins for CORS | http://localhost:3000 |
+| Variable | Description | Default | Required in Production |
+|----------|-------------|---------|------------------------|
+| SERVER_PORT | API server port | 8080 | No |
+| DB_HOST | Database hostname | postgres | No |
+| DB_PORT | Database port | 5432 | No |
+| DB_USER | Database username | postgres | No |
+| DB_PASSWORD | Database password | postgres | Yes (change) |
+| DB_NAME | Database name | garden_planner | No |
+| JWT_SECRET | JWT signing secret | - | Yes |
+| JWT_EXPIRATION_HOURS | Token expiration in hours | 24 | No |
+| CORS_ALLOW_ORIGINS | Allowed origins for CORS | https://yourdomain.com | Yes |
+| GIN_MODE | Gin framework mode | release | No |
+
+### Frontend
+
+| Variable | Description | Default | Required in Production |
+|----------|-------------|---------|------------------------|
+| VITE_API_URL | API base URL | /api | No |
+| WEB_PORT | HTTP port | 80 | No |
+| WEB_SSL_PORT | HTTPS port | 443 | No |
+| SSL_CERT_PATH | Path to SSL certificate | ./ssl/cert.pem | Yes |
+| SSL_KEY_PATH | Path to SSL private key | ./ssl/key.pem | Yes |
+
+## Maintenance and Backups
+
+### Database Backups
+
+To back up the PostgreSQL database:
+
+```bash
+docker exec -t garden_planner_postgres_1 pg_dumpall -c -U postgres > garden_planner_backup_$(date +%Y-%m-%d_%H-%M-%S).sql
+```
+
+To restore from a backup:
+
+```bash
+cat garden_planner_backup.sql | docker exec -i garden_planner_postgres_1 psql -U postgres
+```
+
+## Security Considerations
+
+- All passwords are stored using bcrypt hashing
+- JWT tokens are used for authentication
+- HTTPS is enforced in production
+- Database is not exposed to the public internet
+- Backend uses a distroless container for minimal attack surface
 
 ## License
 

@@ -22,6 +22,11 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
+	// Set Gin mode based on environment
+	if os.Getenv("GIN_MODE") == "release" || os.Getenv("NODE_ENV") == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	// Connect to database
 	dbConfig := &database.Config{
 		Host:     cfg.Database.Host,
@@ -60,7 +65,16 @@ func main() {
 
 	// Configure CORS
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = cfg.CORS.AllowOrigins
+	
+	// In production, be more restrictive with CORS
+	if os.Getenv("NODE_ENV") == "production" {
+		// Only allow origins specified in config
+		corsConfig.AllowOrigins = cfg.CORS.AllowOrigins
+	} else {
+		// In development, allow localhost origins
+		corsConfig.AllowOrigins = []string{"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"}
+	}
+	
 	corsConfig.AllowCredentials = cfg.CORS.AllowCredentials
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	corsConfig.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}

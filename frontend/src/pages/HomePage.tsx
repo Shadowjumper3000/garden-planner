@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -12,7 +11,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Garden } from "@/types";
-import { gardenAPI, getMockGardens } from "@/api";
+import { gardenAPI } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Folder, FolderPlus, Leaf } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -26,28 +25,33 @@ const createGardenSchema = z.object({
 type CreateGardenFormValues = z.infer<typeof createGardenSchema>;
 
 const HomePage = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
   
-  // Fetch gardens or use mock data
-  const { data: gardens = [], isLoading, refetch } = useQuery({
-    queryKey: ["gardens"],
+  // Fetch gardens using the real API
+  const { data: gardens = [], isLoading: gardensLoading, refetch } = useQuery({
+    queryKey: ["gardens", isAuthenticated], // Add isAuthenticated to queryKey
     queryFn: async () => {
+      if (!isAuthenticated) {
+        return [];
+      }
+      
       try {
-        if (!isAuthenticated) {
-          return [];
-        }
-        
-        // In a real app, this would call gardenAPI.getAll()
-        // For demo, we'll use mock data
-        return getMockGardens();
+        return await gardenAPI.getAll();
       } catch (error) {
         console.error("Error fetching gardens:", error);
         return [];
       }
     },
+    enabled: isAuthenticated && !authLoading, // Only run query when authentication is ready
+    // Retry failed requests to handle timing issues with token availability
+    retry: 2,
+    retryDelay: 1000,
   });
+  
+  // Combine loading states
+  const isLoading = authLoading || gardensLoading;
   
   const { register, handleSubmit, formState: { errors }, reset } = useForm<CreateGardenFormValues>({
     resolver: zodResolver(createGardenSchema),
@@ -60,8 +64,8 @@ const HomePage = () => {
   
   const onCreateGarden = async (data: CreateGardenFormValues) => {
     try {
-      // In a real app, this would call gardenAPI.create()
-      console.log("Creating garden:", data);
+      // Use the real API to create a garden
+      await gardenAPI.create(data);
       
       toast({
         title: "Garden Created",
@@ -260,7 +264,7 @@ const HomePage = () => {
               <Card>
                 <CardHeader>
                   <div className="w-12 h-12 bg-garden-primary/10 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-garden-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-garden-primary">
                       <rect x="3" y="3" width="18" height="18" rx="2" />
                       <path d="M3 9h18" />
                       <path d="M9 21V9" />
@@ -276,7 +280,7 @@ const HomePage = () => {
               <Card>
                 <CardHeader>
                   <div className="w-12 h-12 bg-garden-primary/10 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-garden-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-garden-primary">
                       <path d="M2 22c1.25-1 2.5-1 5-1 2 0 3 1 5 1s3-1 5-1c2.5 0 3.75 0 5 1" />
                       <path d="M2 17c1.25-1 2.5-1 5-1 2 0 3 1 5 1s3-1 5-1c2.5 0 3.75 0 5 1" />
                       <path d="M2 12c1.25-1 2.5-1 5-1 2 0 3 1 5 1s3-1 5-1c2.5 0 3.75 0 5 1" />
@@ -295,7 +299,7 @@ const HomePage = () => {
               <Card>
                 <CardHeader>
                   <div className="w-12 h-12 bg-garden-primary/10 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-garden-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-garden-primary">
                       <path d="M12 2L3 9h4v11h10V9h4z" />
                       <path d="M12 3v10" />
                       <path d="M6 13h12" />
