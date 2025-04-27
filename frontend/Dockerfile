@@ -24,9 +24,6 @@ COPY rate_limiting.conf /etc/nginx/conf.d/rate_limiting.conf
 # Copy custom Nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Add include directive for rate limiting config in the http context
-RUN sed -i '/http {/a \    include /etc/nginx/conf.d/rate_limiting.conf;' /etc/nginx/nginx.conf
-
 # Copy SSL directory (will be populated by volume mount in production)
 RUN mkdir -p /etc/nginx/ssl
 
