@@ -46,8 +46,6 @@ services:
       JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
       CORS_ALLOW_CREDENTIALS: "true"
-    # Only expose API to the internal network in production
-    # The frontend will proxy API requests
     expose:
       - "8080"
     depends_on:
