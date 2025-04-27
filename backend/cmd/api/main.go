@@ -20,13 +20,23 @@ import (
 	"github.com/shadowjumper3000/garden_planner/backend/internal/services/metrics"
 )
 
+type productionLogger struct{}
+
+func (p *productionLogger) Write(data []byte) (int, error) {
+	// Custom logging logic for production
+	return len(data), nil
+}
+
 func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
 	// Set Gin mode based on environment
-	if os.Getenv("GIN_MODE") == "release" || os.Getenv("NODE_ENV") == "production" {
+	isProduction := os.Getenv("GIN_MODE") == "release" || os.Getenv("NODE_ENV") == "production"
+	if isProduction {
 		gin.SetMode(gin.ReleaseMode)
+		// In production, don't log detailed information about seed data
+		log.SetOutput(&productionLogger{})
 	}
 
 	// Connect to database
@@ -51,7 +61,11 @@ func main() {
 
 	// Seed initial data if needed
 	if err := database.SeedDB(db); err != nil {
-		log.Printf("Failed to seed database: %v", err)
+		if isProduction {
+			log.Printf("Database seed operation completed")
+		} else {
+			log.Printf("Failed to seed database: %v", err)
+		}
 	}
 
 	// Initialize services

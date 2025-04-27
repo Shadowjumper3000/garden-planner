@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/shadowjumper3000/garden_planner/backend/internal/models"
@@ -28,14 +29,20 @@ func NewConnection(config *Config) (*gorm.DB, error) {
 		config.Host, config.Port, config.User, config.Password, config.DBName, config.SSLMode,
 	)
 
+	// Determine log level based on environment
+	logLevel := logger.Info
+	if os.Getenv("GIN_MODE") == "release" || os.Getenv("NODE_ENV") == "production" {
+		logLevel = logger.Error // Only log errors in production
+	}
+
 	// Configure GORM logger
 	newLogger := logger.New(
 		log.New(log.Writer(), "\r\n", log.LstdFlags),
 		logger.Config{
 			SlowThreshold:             time.Second,
-			LogLevel:                  logger.Info,
+			LogLevel:                  logLevel,
 			IgnoreRecordNotFoundError: true,
-			Colorful:                  true,
+			Colorful:                  os.Getenv("NODE_ENV") != "production", // No color in production logs
 		},
 	)
 

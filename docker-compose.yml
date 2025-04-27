@@ -16,6 +16,11 @@ services:
     networks:
       - garden-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Don't expose PostgreSQL port in production
     # ports are commented out for security
     # ports:
@@ -51,6 +56,11 @@ services:
     networks:
       - garden-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build:
@@ -70,6 +80,13 @@ services:
     networks:
       - garden-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "cloudflare.tunnel.target=true" # Help identify this container as the tunnel target
 
 volumes:
   postgres_data:
