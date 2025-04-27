@@ -63,6 +63,9 @@ func MigrateDB(db *gorm.DB) error {
 		&models.Garden{},
 		&models.PlantPlacement{},
 		&models.GardenEvent{},
+		&models.UserActivity{},      // Added for metrics tracking
+		&models.MetricDailySummary{}, // Added for daily metrics aggregation
+		&models.SystemStat{},        // Added for system statistics
 	)
 	if err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
@@ -75,6 +78,11 @@ func SeedDB(db *gorm.DB) error {
 	// Seed plants
 	if err := SeedPlants(db); err != nil {
 		return fmt.Errorf("failed to seed plants: %w", err)
+	}
+	
+	// Seed admin user
+	if err := SeedAdminUser(db); err != nil {
+		return fmt.Errorf("failed to seed admin user: %w", err)
 	}
 	
 	return nil

@@ -1,7 +1,33 @@
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ChartData,
+  ChartOptions,
+} from "chart.js"
+import { Bar, Line } from "react-chartjs-2"
 
 import { cn } from "@/lib/utils"
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+)
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
@@ -351,6 +377,51 @@ function getPayloadConfigFromPayload(
   return configLabelKey in config
     ? config[configLabelKey]
     : config[key as keyof typeof config]
+}
+
+interface ChartProps {
+  data: ChartData<"bar" | "line", number[], string>
+  options?: ChartOptions<"bar" | "line">
+}
+
+export const BarChart: React.FC<ChartProps> = ({ data, options }) => {
+  // Default options
+  const defaultOptions: ChartOptions<"bar"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "top" as const,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
+  }
+
+  return <Bar data={data} options={options || defaultOptions} />
+}
+
+export const LineChart: React.FC<ChartProps> = ({ data, options }) => {
+  // Default options
+  const defaultOptions: ChartOptions<"line"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "top" as const,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
+  }
+
+  return <Line data={data} options={options || defaultOptions} />
 }
 
 export {

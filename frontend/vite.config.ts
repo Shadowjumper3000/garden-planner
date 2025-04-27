@@ -6,7 +6,15 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
+    proxy: {
+      // Proxy API requests to the backend service
+      '/api': {
+        target: 'http://backend:8080', // Uses Docker container name for resolution
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
   plugins: [
     react(),

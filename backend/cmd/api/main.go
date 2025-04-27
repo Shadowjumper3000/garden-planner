@@ -11,11 +11,13 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron/v3"
 	"github.com/shadowjumper3000/garden_planner/backend/config"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/database"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/handlers"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/middleware"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/services"
+	"github.com/shadowjumper3000/garden_planner/backend/internal/services/metrics"
 )
 
 func main() {
@@ -54,11 +56,13 @@ func main() {
 
 	// Initialize services
 	soilCalculator := &services.SoilCalculator{DB: db}
+	metricsService := metrics.NewMetricsService(db)
 
 	// Initialize handlers
-	authHandler := &handlers.AuthHandler{DB: db, Config: cfg}
+	authHandler := &handlers.AuthHandler{DB: db, Config: cfg, MetricsService: metricsService}
 	gardenHandler := &handlers.GardenHandler{DB: db, SoilCalculator: soilCalculator}
 	plantHandler := &handlers.PlantHandler{DB: db}
+	adminHandler := &handlers.AdminHandler{DB: db, MetricsService: metricsService}
 
 	// Set up Gin router
 	router := gin.Default()
@@ -82,6 +86,9 @@ func main() {
 
 	// Auth middleware
 	authMiddleware := middleware.AuthMiddleware(&cfg.JWT)
+
+	// Admin middleware
+	adminMiddleware := middleware.AdminMiddleware()
 
 	// Public routes
 	public := router.Group("/api")
@@ -115,6 +122,25 @@ func main() {
 		protected.POST("/plants", plantHandler.CreatePlant)
 	}
 
+	// Admin routes (protected by both auth and admin middleware)
+	admin := router.Group("/api/admin")
+	admin.Use(authMiddleware, adminMiddleware)
+	{
+		// Metrics and stats
+		admin.GET("/metrics", adminHandler.GetMetrics)
+		admin.GET("/metrics/daily", adminHandler.GetDailyMetrics)
+		admin.GET("/metrics/system", adminHandler.GetSystemStats)
+		admin.POST("/metrics/generate", adminHandler.TriggerDailyMetricsGeneration)
+		
+		// User management
+		admin.GET("/users", adminHandler.GetUsers)
+		admin.GET("/activities", adminHandler.GetUserActivities)
+		admin.PUT("/users/:id/role", adminHandler.SetUserRole)
+		
+		// Advanced plant management (potentially add more admin-only plant operations here)
+		admin.POST("/plants", plantHandler.CreatePlant)
+	}
+
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now().Format(time.RFC3339)})
@@ -137,6 +163,18 @@ func main() {
 		}
 	}()
 
+	// Initialize cron job for metrics
+	c := cron.New()
+	_, err = c.AddFunc("@daily", func() {
+		if err := metricsService.GenerateDailyMetrics(); err != nil {
+			log.Printf("Failed to generate daily metrics: %v", err)
+		}
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule cron job: %v", err)
+	}
+	c.Start()
+
 	// Set up graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -150,6 +188,9 @@ func main() {
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
+
+	// Stop cron job
+	c.Stop()
 
 	log.Println("Server exiting")
 }

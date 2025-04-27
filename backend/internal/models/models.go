@@ -11,12 +11,14 @@ import (
 // User model
 type User struct {
 	gorm.Model
-	ID       uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
-	Name     string         `json:"name"`
-	Email    string         `gorm:"uniqueIndex" json:"email"`
-	Password string         `json:"-"` // Password is not exposed in JSON
-	Gardens  []Garden       `gorm:"foreignKey:UserID" json:"-"`
-	GardenIDs []string      `gorm:"-" json:"gardens"`
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `gorm:"uniqueIndex" json:"email"`
+	Password  string         `json:"-"` // Password is not exposed in JSON
+	Gardens   []Garden       `gorm:"foreignKey:UserID" json:"-"`
+	GardenIDs []string       `gorm:"-" json:"gardens"`
+	Role      string         `gorm:"default:'user'" json:"role"` // New: 'user' or 'admin'
+	LastLogin time.Time      `json:"lastLogin"`
 }
 
 // Plant model with time-aware fields
@@ -134,6 +136,38 @@ type SoilTimeline struct {
 	Timeline []TimelinePoint `json:"timeline"`
 }
 
+// UserActivity tracks user interactions with the system
+type UserActivity struct {
+	gorm.Model
+	ID           uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	UserID       uuid.UUID      `json:"userId"`
+	User         User           `gorm:"foreignKey:UserID" json:"-"`
+	ActivityType string         `json:"activityType"` // LOGIN, CREATE_GARDEN, ADD_PLANT, etc.
+	ResourceID   *uuid.UUID     `json:"resourceId,omitempty"` // ID of the resource being acted upon
+	ResourceType string         `json:"resourceType,omitempty"` // GARDEN, PLANT, etc.
+	Timestamp    time.Time      `json:"timestamp"`
+	Details      datatypes.JSON `gorm:"type:jsonb" json:"details,omitempty"`
+}
+
+// MetricDailySummary holds aggregated metrics for a specific day
+type MetricDailySummary struct {
+	gorm.Model
+	ID             uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	Date           time.Time      `gorm:"uniqueIndex:idx_date_metric_type" json:"date"`
+	MetricType     string         `gorm:"uniqueIndex:idx_date_metric_type" json:"metricType"` // ACTIVE_USERS, NEW_USERS, NEW_GARDENS, etc.
+	Count          int            `json:"count"`
+	AdditionalData datatypes.JSON `gorm:"type:jsonb" json:"additionalData,omitempty"`
+}
+
+// SystemStat provides overall system statistics
+type SystemStat struct {
+	gorm.Model
+	ID          uuid.UUID `gorm:"type:uuid;primary_key" json:"id"`
+	Name        string    `gorm:"uniqueIndex" json:"name"` // TOTAL_USERS, TOTAL_GARDENS, etc.
+	Value       int       `json:"value"`
+	LastUpdated time.Time `json:"lastUpdated"`
+}
+
 // BeforeCreate hook for UUID generation
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == uuid.Nil {
@@ -166,6 +200,27 @@ func (pp *PlantPlacement) BeforeCreate(tx *gorm.DB) error {
 func (ge *GardenEvent) BeforeCreate(tx *gorm.DB) error {
 	if ge.ID == uuid.Nil {
 		ge.ID = uuid.New()
+	}
+	return nil
+}
+
+func (ua *UserActivity) BeforeCreate(tx *gorm.DB) error {
+	if ua.ID == uuid.Nil {
+		ua.ID = uuid.New()
+	}
+	return nil
+}
+
+func (mds *MetricDailySummary) BeforeCreate(tx *gorm.DB) error {
+	if mds.ID == uuid.Nil {
+		mds.ID = uuid.New()
+	}
+	return nil
+}
+
+func (ss *SystemStat) BeforeCreate(tx *gorm.DB) error {
+	if ss.ID == uuid.Nil {
+		ss.ID = uuid.New()
 	}
 	return nil
 }

@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Home, Leaf, LogOut, User } from "lucide-react";
+import { Home, Leaf, LogOut, User, LayoutDashboard } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -28,6 +28,12 @@ const Layout = ({ children }: LayoutProps) => {
                 <Link to="/plants" className="hover:text-garden-light transition-colors">
                   Plant Library
                 </Link>
+                {user?.role === 'admin' && (
+                  <Link to="/admin" className="hover:text-garden-light transition-colors flex items-center">
+                    <LayoutDashboard className="h-4 w-4 mr-1" />
+                    Admin
+                  </Link>
+                )}
               </>
             )}
           </nav>

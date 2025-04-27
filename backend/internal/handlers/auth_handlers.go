@@ -8,14 +8,16 @@ import (
 	"github.com/shadowjumper3000/garden_planner/backend/config"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/middleware"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/models"
+	"github.com/shadowjumper3000/garden_planner/backend/internal/services/metrics"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 // AuthHandler handles authentication-related routes
 type AuthHandler struct {
-	DB     *gorm.DB
-	Config *config.Config
+	DB            *gorm.DB
+	Config        *config.Config
+	MetricsService *metrics.MetricsService
 }
 
 // RegisterRequest holds data for user registration
@@ -62,12 +64,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Create new user
+	// Create new user with default role 'user'
 	user := models.User{
 		ID:       uuid.New(),
 		Name:     req.Name,
 		Email:    req.Email,
 		Password: string(hashedPassword),
+		Role:     "user", // Default role
 	}
 
 	// Save user to database
@@ -76,11 +79,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Generate JWT token
-	token, err := middleware.GenerateJWT(user.ID, user.Email, &h.Config.JWT)
+	// Generate JWT token with role
+	token, err := middleware.GenerateJWT(user.ID, user.Email, user.Role, &h.Config.JWT)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
 		return
+	}
+
+	// Record registration activity
+	if h.MetricsService != nil {
+		h.MetricsService.RecordActivity(user.ID, "REGISTER", nil, "", nil)
 	}
 
 	// Prepare response (don't include password)
@@ -130,11 +138,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		user.GardenIDs[i] = garden.ID.String()
 	}
 
-	// Generate JWT token
-	token, err := middleware.GenerateJWT(user.ID, user.Email, &h.Config.JWT)
+	// Generate JWT token with role
+	token, err := middleware.GenerateJWT(user.ID, user.Email, user.Role, &h.Config.JWT)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
 		return
+	}
+
+	// Record login activity
+	if h.MetricsService != nil {
+		h.MetricsService.RecordActivity(user.ID, "LOGIN", nil, "", nil)
 	}
 
 	// Prepare response

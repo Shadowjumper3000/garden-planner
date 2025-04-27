@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -8,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import Layout from "@/components/Layout";
-import { Leaf } from "lucide-react";
+import { Leaf, AlertCircle } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -22,6 +22,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 const Login = () => {
   const { login, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -36,11 +37,23 @@ const Login = () => {
   }
 
   async function onSubmit(data: LoginFormValues) {
+    setError(null);
     try {
       setIsLoading(true);
       await login(data.email, data.password);
     } catch (error) {
       console.error("Login error:", error);
+      
+      // Display appropriate error message based on error type
+      if (error instanceof Error) {
+        if (error.name === 'BackendConnectionError') {
+          setError('Cannot connect to the backend server. Please ensure the server is running and try again.');
+        } else {
+          setError(error.message || 'Login failed. Please check your credentials and try again.');
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again later.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -60,6 +73,13 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField

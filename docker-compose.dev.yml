@@ -8,6 +8,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: garden_planner_dev
+    # Only expose PostgreSQL port in development
+    # Comment this out for production
     ports:
       - "5432:5432"
     healthcheck:
@@ -37,7 +39,7 @@ services:
       DB_SSL_MODE: disable
       JWT_SECRET: dev_jwt_secret_not_for_production
       JWT_EXPIRATION_HOURS: 24
-      CORS_ALLOW_ORIGINS: http://localhost:5173,http://localhost:8080,http://127.0.0.1:5173,http://127.0.0.1:8080
+      CORS_ALLOW_ORIGINS: http://localhost:5173,http://localhost:8000,http://127.0.0.1:5173,http://127.0.0.1:8000
       CORS_ALLOW_CREDENTIALS: "true"
     volumes:
       - ./backend:/app
@@ -54,11 +56,14 @@ services:
     volumes:
       - ./frontend:/app
     ports:
-      - "5173:8080"
+      - "5173:5173"
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=http://localhost:8000/api
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+      # Use relative API URL for better container networking
+      - VITE_API_URL=/api
+    # Update the command to use the proxy configuration from vite.config.ts
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"
     depends_on:
       - backend
     networks:

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/models"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -149,5 +150,41 @@ func SeedPlants(db *gorm.DB) error {
 	}
 
 	log.Println("Seeded database with initial plants")
+	return nil
+}
+
+// SeedAdminUser creates an admin user if one doesn't exist already
+func SeedAdminUser(db *gorm.DB) error {
+	var count int64
+	db.Model(&models.User{}).Where("role = ?", "admin").Count(&count)
+
+	// Only seed if no admin exists
+	if count > 0 {
+		log.Println("Admin user already exists, skipping admin seed")
+		return nil
+	}
+
+	log.Println("Creating admin user...")
+
+	// Generate password hash with proper cost factor
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// Create admin user
+	admin := models.User{
+		ID:       uuid.New(),
+		Name:     "Admin User",
+		Email:    "admin@gardenplanner.com",
+		Password: string(hashedPassword),
+		Role:     "admin",
+	}
+
+	if err := db.Create(&admin).Error; err != nil {
+		return err
+	}
+
+	log.Println("Admin user created successfully. Email: admin@gardenplanner.com, Password: admin123")
 	return nil
 }

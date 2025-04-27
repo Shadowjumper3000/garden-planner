@@ -53,6 +53,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  role: string; // 'user' or 'admin'
   gardens: string[]; // ids of gardens
 }
 

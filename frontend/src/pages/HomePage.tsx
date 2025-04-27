@@ -30,25 +30,29 @@ const HomePage = () => {
   const { toast } = useToast();
   
   // Fetch gardens using the real API
-  const { data: gardens = [], isLoading: gardensLoading, refetch } = useQuery({
-    queryKey: ["gardens", isAuthenticated], // Add isAuthenticated to queryKey
+  const { data = [], isLoading: gardensLoading, refetch } = useQuery({
+    queryKey: ["gardens", isAuthenticated],
     queryFn: async () => {
       if (!isAuthenticated) {
         return [];
       }
       
       try {
-        return await gardenAPI.getAll();
+        const response = await gardenAPI.getAll();
+        // Ensure we always return an array
+        return Array.isArray(response) ? response : [];
       } catch (error) {
         console.error("Error fetching gardens:", error);
         return [];
       }
     },
-    enabled: isAuthenticated && !authLoading, // Only run query when authentication is ready
-    // Retry failed requests to handle timing issues with token availability
+    enabled: isAuthenticated && !authLoading,
     retry: 2,
     retryDelay: 1000,
   });
+  
+  // Ensure gardens is always an array
+  const gardens = Array.isArray(data) ? data : [];
   
   // Combine loading states
   const isLoading = authLoading || gardensLoading;

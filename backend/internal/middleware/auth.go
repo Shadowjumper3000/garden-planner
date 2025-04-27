@@ -16,6 +16,7 @@ import (
 type JWTClaims struct {
 	UserID string `json:"userId"`
 	Email  string `json:"email"`
+	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -63,6 +64,7 @@ func AuthMiddleware(config *config.JWTConfig) gin.HandlerFunc {
 			// Store the claims in the context
 			c.Set("userId", claims.UserID)
 			c.Set("email", claims.Email)
+			c.Set("userRole", claims.Role)
 			c.Next()
 		} else {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
@@ -72,12 +74,28 @@ func AuthMiddleware(config *config.JWTConfig) gin.HandlerFunc {
 	}
 }
 
+// AdminMiddleware ensures a user has admin role
+func AdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get role from context (should be set by AuthMiddleware)
+		role, exists := c.Get("userRole")
+		if !exists || role.(string) != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+		
+		c.Next()
+	}
+}
+
 // GenerateJWT generates a JWT token for a user
-func GenerateJWT(userID uuid.UUID, email string, config *config.JWTConfig) (string, error) {
+func GenerateJWT(userID uuid.UUID, email string, role string, config *config.JWTConfig) (string, error) {
 	// Create the claims
 	claims := &JWTClaims{
 		UserID: userID.String(),
 		Email:  email,
+		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(config.Expiration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

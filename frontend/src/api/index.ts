@@ -1,16 +1,26 @@
 import axios from 'axios';
 import { Garden, Plant, SoilData, User } from '../types';
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' // In production, use relative path which will be handled by the server
-  : 'http://localhost:8000/api'; // Updated port to match our docker-compose backend port
+// Check if we're in development mode
+const isDevelopment = import.meta.env.MODE === 'development';
+
+// In Docker environment, the backend is available via the container name
+// The Nginx proxy will handle routing requests to the backend
+const API_BASE_URL = isDevelopment 
+  ? '/api' // In dev, Nginx proxies /api to the backend container
+  : '/api'; // In production, also use /api which Nginx will proxy
+
+console.log('Using API base URL:', API_BASE_URL);
 
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
-  }
+    'Accept': 'application/json', // Explicitly request JSON responses
+  },
+  // Add timeout to avoid hanging requests
+  timeout: 10000,
 });
 
 // Add request interceptor for auth
@@ -23,6 +33,32 @@ api.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// Add response interceptor to handle HTML responses
+api.interceptors.response.use(
+  (response) => {
+    // Check if the response is HTML (usually means we got redirected to a login page)
+    if (response.data && typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+      console.error('API returned HTML instead of JSON. You might be redirected to a login page.');
+      // Convert to an error to trigger the error handler
+      return Promise.reject(new Error('API returned HTML instead of JSON. You might need to log in again.'));
+    }
+    return response;
+  },
+  (error) => {
+    // Enhance error messages for network issues
+    if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+      console.error('Network error connecting to backend:', error);
+      const enhancedError = new Error(
+        `Cannot connect to the backend server at ${API_BASE_URL}. ` +
+        'Please ensure the backend service is running and accessible through Nginx.'
+      );
+      enhancedError.name = 'BackendConnectionError';
+      return Promise.reject(enhancedError);
+    }
+    return Promise.reject(error);
+  }
 );
 
 // Auth APIs
@@ -120,5 +156,151 @@ export const plantAPI = {
   
   delete: async (id: string): Promise<void> => {
     await api.delete(`/plants/${id}`);
+  }
+};
+
+// Admin APIs
+export const adminAPI = {
+  getUsers: async (page: number = 1, pageSize: number = 10, search?: string): Promise<any> => {
+    try {
+      let url = `/admin/users?page=${page}&pageSize=${pageSize}`;
+      if (search) {
+        url += `&search=${encodeURIComponent(search)}`;
+      }
+
+      // Debug logging for auth token
+      const token = localStorage.getItem('garden_token');
+      console.log('Auth token exists:', !!token);
+      if (token) {
+        // Log the first few characters of the token for debugging (don't log the whole token)
+        console.log('Token starts with:', token.substring(0, 10) + '...');
+      }
+
+      const response = await api.get(url);
+      console.log('Raw API response:', response);
+      
+      // Ensure we return a proper data structure even if the response is unexpected
+      const data = response.data || {};
+      return {
+        users: Array.isArray(data.users) ? data.users : [],
+        total: typeof data.total === 'number' ? data.total : 0,
+        page: typeof data.page === 'number' ? data.page : page,
+        pageSize: typeof data.pageSize === 'number' ? data.pageSize : pageSize
+      };
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      // Return default structure on error
+      return {
+        users: [],
+        total: 0,
+        page: page,
+        pageSize: pageSize
+      };
+    }
+  },
+  
+  getUserActivities: async (page: number = 1, pageSize: number = 10, filters?: { activityType?: string, userId?: string }): Promise<any> => {
+    try {
+      let url = `/admin/activities?page=${page}&pageSize=${pageSize}`;
+      if (filters) {
+        if (filters.activityType) {
+          url += `&activityType=${encodeURIComponent(filters.activityType)}`;
+        }
+        if (filters.userId) {
+          url += `&userId=${encodeURIComponent(filters.userId)}`;
+        }
+      }
+      const response = await api.get(url);
+      // Ensure we return a proper data structure even if the response is unexpected
+      const data = response.data || {};
+      return {
+        activities: Array.isArray(data.activities) ? data.activities : [],
+        total: typeof data.total === 'number' ? data.total : 0,
+        page: typeof data.page === 'number' ? data.page : page,
+        pageSize: typeof data.pageSize === 'number' ? data.pageSize : pageSize
+      };
+    } catch (error) {
+      console.error('Error fetching user activities:', error);
+      // Return default structure on error
+      return {
+        activities: [],
+        total: 0,
+        page: page,
+        pageSize: pageSize
+      };
+    }
+  },
+  
+  getMetrics: async (): Promise<any> => {
+    try {
+      const response = await api.get('/admin/metrics');
+      // Ensure we return a proper data structure even if the response is unexpected
+      const data = response.data || {};
+      return {
+        systemStats: Array.isArray(data.systemStats) ? data.systemStats : [],
+        dailyMetrics: Array.isArray(data.dailyMetrics) ? data.dailyMetrics : []
+      };
+    } catch (error) {
+      console.error('Error fetching metrics:', error);
+      // Return default structure on error
+      return {
+        systemStats: [],
+        dailyMetrics: []
+      };
+    }
+  },
+  
+  getDailyMetrics: async (startDate?: string, endDate?: string, metricTypes?: string[]): Promise<any> => {
+    let url = '/admin/metrics/daily';
+    const params = new URLSearchParams();
+    
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    if (metricTypes && metricTypes.length) {
+      metricTypes.forEach(type => params.append('metricType', type));
+    }
+    
+    const queryString = params.toString();
+    if (queryString) {
+      url += `?${queryString}`;
+    }
+    
+    try {
+      const response = await api.get(url);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      console.error('Error fetching daily metrics:', error);
+      return [];
+    }
+  },
+  
+  getSystemStats: async (): Promise<any> => {
+    try {
+      const response = await api.get('/admin/metrics/system');
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      console.error('Error fetching system stats:', error);
+      return [];
+    }
+  },
+  
+  setUserRole: async (userId: string, role: 'user' | 'admin'): Promise<any> => {
+    try {
+      const response = await api.put(`/admin/users/${userId}/role`, { role });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      throw error;
+    }
+  },
+  
+  generateDailyMetrics: async (): Promise<any> => {
+    try {
+      const response = await api.post('/admin/metrics/generate');
+      return response.data;
+    } catch (error) {
+      console.error('Error generating daily metrics:', error);
+      throw error;
+    }
   }
 };
