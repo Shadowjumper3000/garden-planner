@@ -50,17 +50,17 @@ type CORSConfig struct {
 func LoadConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Port:         getEnv("SERVER_PORT", "8080"),
+			Port:         getEnv("WEB_PORT", "8080"),
 			ReadTimeout:  time.Duration(getEnvAsInt("SERVER_READ_TIMEOUT", 10)) * time.Second,
 			WriteTimeout: time.Duration(getEnvAsInt("SERVER_WRITE_TIMEOUT", 10)) * time.Second,
 			IdleTimeout:  time.Duration(getEnvAsInt("SERVER_IDLE_TIMEOUT", 30)) * time.Second,
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres"),
-			DBName:   getEnv("DB_NAME", "garden_planner"),
+			Port:     getEnv("POSTGRES_PORT", "5432"),
+			User:     getEnv("POSTGRES_USER", "postgres"),
+			Password: getEnv("POSTGRES_PASSWORD", "postgres"),
+			DBName:   getEnv("POSTGRES_DB", "garden_planner"),
 			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 		},
 		JWT: JWTConfig{
@@ -125,12 +125,14 @@ func getEnvAsSlice(key string, defaultValue []string) []string {
 
 // Get an environment variable with a required check for production
 func getEnvWithRequiredCheck(key, defaultValue, environment string) string {
-	if environment == "production" {
-		value, exists := os.LookupEnv(key)
-		if !exists || value == "" {
-			panic(fmt.Sprintf("Environment variable %s is required in production", key))
-		}
+	if value, exists := os.LookupEnv(key); exists && value != "" {
 		return value
 	}
-	return getEnv(key, defaultValue)
+	
+	env := os.Getenv("NODE_ENV")
+	if env == environment || env == "production" {
+		panic(fmt.Sprintf("Environment variable %s is required in production", key))
+	}
+	
+	return defaultValue
 }
