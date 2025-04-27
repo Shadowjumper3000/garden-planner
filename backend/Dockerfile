@@ -18,13 +18,11 @@ COPY . .
 # Build the application with optimization
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-s -w" -o garden-planner-api ./cmd/api
 
-# Use distroless for the smallest possible image and improved security
-FROM gcr.io/distroless/static:nonroot
+# Use Alpine for the final image - easier for health checks
+FROM alpine:latest
 
 # Copy timezone data
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-
-# Copy SSL certificates
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 WORKDIR /app
@@ -32,12 +30,9 @@ WORKDIR /app
 # Copy the binary from the builder stage
 COPY --from=builder /app/garden-planner-api .
 
-# Use non-root user for security
-USER nonroot:nonroot
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD ["/app/garden-planner-api", "-health-check"] || exit 1
+    CMD wget -q --spider http://localhost:8080/health || exit 1
 
 # Expose the API port
 EXPOSE 8080

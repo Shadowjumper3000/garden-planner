@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,7 +26,25 @@ import (
 type productionLogger struct{}
 
 func (p *productionLogger) Write(data []byte) (int, error) {
-	// Custom logging logic for production
+	// Convert to string for easier handling
+	logMessage := string(data)
+	
+	// Allow important logs like server status, admin user creation, etc.
+	// But filter out potentially sensitive information
+	if strings.Contains(logMessage, "Server starting") ||
+	   strings.Contains(logMessage, "Shutting down") ||
+	   strings.Contains(logMessage, "Admin user created") ||
+	   strings.Contains(logMessage, "Database seed") ||
+	   strings.Contains(logMessage, "migrations") {
+		
+		// Filter out password if present in the log
+		sanitizedLog := regexp.MustCompile(`Password: [^,\s]+`).
+			ReplaceAllString(logMessage, "Password: [REDACTED]")
+		
+		// Write to stdout
+		fmt.Print(sanitizedLog)
+	}
+	
 	return len(data), nil
 }
 

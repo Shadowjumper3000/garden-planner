@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -191,10 +192,17 @@ func SeedAdminUser(db *gorm.DB) error {
 	securePassword := cfg.AdminPassword
 	adminEmail := cfg.AdminEmail
 	
+	log.Printf("Using admin credentials from environment - Email: %s", adminEmail)
+	
+	// Validate that we have a password before continuing
+	if securePassword == "" {
+		return errors.New("admin password cannot be empty")
+	}
+	
 	// Generate password hash with proper cost factor
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(securePassword), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to hash password: %v", err)
 	}
 
 	// Create admin user
@@ -207,10 +215,11 @@ func SeedAdminUser(db *gorm.DB) error {
 	}
 
 	if err := db.Create(&admin).Error; err != nil {
-		return err
+		return fmt.Errorf("failed to create admin user: %v", err)
 	}
 
-	log.Printf("Admin user created successfully. Email: %s, Password: %s", adminEmail, securePassword)
+	log.Printf("Admin user created successfully with email: %s", adminEmail)
+	log.Println("Use the password from your .env file to log in (not the hashed version)")
 	return nil
 }
 
