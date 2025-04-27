@@ -77,6 +77,7 @@ services:
       - backend
     networks:
       - garden-network
+      - cloudflared
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -94,3 +95,5 @@ networks:
   garden-network:
     name: ${PROJECT_NAME}_network
     driver: bridge
+  cloudflared:
+    external: true
