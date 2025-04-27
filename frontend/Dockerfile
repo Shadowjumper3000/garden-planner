@@ -18,14 +18,14 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine AS production
 
-# Copy rate limiting config into http context of main nginx.conf
+# Copy rate limiting config
 COPY rate_limiting.conf /etc/nginx/conf.d/rate_limiting.conf
 
 # Copy custom Nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Add include directive for rate limiting config to main nginx.conf
-RUN sed -i '1i include /etc/nginx/conf.d/rate_limiting.conf;' /etc/nginx/nginx.conf
+# Add include directive for rate limiting config in the http context
+RUN sed -i '/http {/a \    include /etc/nginx/conf.d/rate_limiting.conf;' /etc/nginx/nginx.conf
 
 # Copy SSL directory (will be populated by volume mount in production)
 RUN mkdir -p /etc/nginx/ssl
