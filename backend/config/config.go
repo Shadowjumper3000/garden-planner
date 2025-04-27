@@ -6,14 +6,18 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Config holds all application configuration
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	CORS     CORSConfig
+	Server       ServerConfig
+	Database     DatabaseConfig
+	JWT          JWTConfig
+	CORS         CORSConfig
+	AdminPassword string
+	AdminEmail    string
 }
 
 // ServerConfig holds server-specific configuration
@@ -71,6 +75,8 @@ func LoadConfig() *Config {
 			AllowOrigins:     getEnvAsSlice("CORS_ALLOW_ORIGINS", []string{"http://localhost:3000"}),
 			AllowCredentials: getEnvAsBool("CORS_ALLOW_CREDENTIALS", true),
 		},
+		AdminPassword: getEnv("ADMIN_PASSWORD", uuid.New().String()),
+		AdminEmail:    getEnv("ADMIN_EMAIL", "admin@gardenplanner.com"),
 	}
 }
 

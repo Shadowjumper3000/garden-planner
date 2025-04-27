@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shadowjumper3000/garden_planner/backend/config"
 	"github.com/shadowjumper3000/garden_planner/backend/internal/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -185,8 +186,10 @@ func SeedAdminUser(db *gorm.DB) error {
 
 	log.Println("Creating admin user...")
 
-	// Generate a secure random password using UUID
-	securePassword := uuid.New().String()
+	// Get admin configuration from environment variables via config
+	cfg := config.LoadConfig()
+	securePassword := cfg.AdminPassword
+	adminEmail := cfg.AdminEmail
 	
 	// Generate password hash with proper cost factor
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(securePassword), bcrypt.DefaultCost)
@@ -198,7 +201,7 @@ func SeedAdminUser(db *gorm.DB) error {
 	admin := models.User{
 		ID:       uuid.New(),
 		Name:     "Admin User",
-		Email:    "admin@gardenplanner.com",
+		Email:    adminEmail,
 		Password: string(hashedPassword),
 		Role:     "admin",
 	}
@@ -207,7 +210,7 @@ func SeedAdminUser(db *gorm.DB) error {
 		return err
 	}
 
-	log.Printf("Admin user created successfully. Email: admin@gardenplanner.com, Password: %s", securePassword)
+	log.Printf("Admin user created successfully. Email: %s, Password: %s", adminEmail, securePassword)
 	return nil
 }
 
