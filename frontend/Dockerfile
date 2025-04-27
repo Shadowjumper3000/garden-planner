@@ -24,9 +24,6 @@ COPY rate_limiting.conf /etc/nginx/conf.d/rate_limiting.conf
 # Copy custom Nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy SSL directory (will be populated by volume mount in production)
-RUN mkdir -p /etc/nginx/ssl
-
 # Copy built assets from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
@@ -34,7 +31,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget -q --spider http://localhost/health || exit 1
 
-# Expose HTTP and HTTPS ports
-EXPOSE 80 443
+# Only expose HTTP port since CloudFlare Tunnel handles SSL termination
+EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
