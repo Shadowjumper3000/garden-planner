@@ -144,18 +144,46 @@ export const plantAPI = {
     return response.data;
   },
   
-  create: async (plant: Omit<Plant, 'id'>): Promise<Plant> => {
+  create: async (plant: Omit<Plant, 'id' | 'creatorId' | 'isEditable'>): Promise<Plant> => {
     const response = await api.post('/plants', plant);
+    // Plant creation will now be logged in activity log on the backend
     return response.data;
   },
   
-  update: async (id: string, plant: Partial<Omit<Plant, 'id'>>): Promise<Plant> => {
+  update: async (id: string, plant: Partial<Omit<Plant, 'id' | 'creatorId' | 'isEditable'>>): Promise<Plant> => {
+    // This will only work if the user is the creator
     const response = await api.put(`/plants/${id}`, plant);
     return response.data;
   },
   
   delete: async (id: string): Promise<void> => {
+    // This will only work if the user is the creator
     await api.delete(`/plants/${id}`);
+  },
+  
+  // New method to copy a plant (creating a new plant based on an existing one)
+  copyPlant: async (id: string, modifications?: Partial<Omit<Plant, 'id' | 'creatorId' | 'isEditable'>>): Promise<Plant> => {
+    // Create a copy that will belong to the current user
+    const response = await api.post(`/plants/${id}/copy`, modifications || {});
+    return response.data;
+  },
+  
+  // Get plants created by the user
+  getMyPlants: async (): Promise<Plant[]> => {
+    const response = await api.get('/plants/my-plants');
+    return response.data;
+  },
+  
+  // Get recent plants the user has interacted with
+  getRecentPlants: async (): Promise<Plant[]> => {
+    const response = await api.get('/plants/recent');
+    return response.data;
+  },
+  
+  // Get shared plants (created by other users)
+  getSharedPlants: async (): Promise<Plant[]> => {
+    const response = await api.get('/plants/shared');
+    return response.data;
   }
 };
 

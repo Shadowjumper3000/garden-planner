@@ -118,8 +118,14 @@ func main() {
 		protected.GET("/gardens/:id/soil", gardenHandler.GetSoilData)
 		protected.GET("/gardens/:id/future-soil", gardenHandler.GetFutureSoil)
 
-		// Admin plant routes (could be further restricted in production)
+		 // Plant routes with ownership controls
 		protected.POST("/plants", plantHandler.CreatePlant)
+		protected.PUT("/plants/:id", plantHandler.UpdatePlant)       // Will check creator ownership
+		protected.DELETE("/plants/:id", plantHandler.DeletePlant)    // Will check creator ownership
+		protected.POST("/plants/:id/copy", plantHandler.CopyPlant)   // Anyone can copy a plant
+		protected.GET("/plants/my-plants", plantHandler.GetMyPlants) // Get user's created plants
+		protected.GET("/plants/recent", plantHandler.GetRecentPlants) // Get recently used plants
+		protected.GET("/plants/shared", plantHandler.GetSharedPlants) // Get plants created by others
 	}
 
 	// Admin routes (protected by both auth and admin middleware)

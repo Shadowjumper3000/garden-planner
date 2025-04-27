@@ -21,13 +21,14 @@ type User struct {
 	LastLogin time.Time      `json:"lastLogin"`
 }
 
-// Plant model with time-aware fields
+// Plant model with time-aware fields and creator tracking
 type Plant struct {
 	gorm.Model
 	ID              uuid.UUID                `gorm:"type:uuid;primary_key" json:"id"`
 	Name            string                   `json:"name"`
 	ImageURL        string                   `json:"imageUrl,omitempty"`
 	Description     string                   `json:"description"`
+	CreatorID       uuid.UUID                `json:"creatorId"`  // ID of user who created the plant
 	NutrientImpact  datatypes.JSON           `gorm:"type:jsonb" json:"-"` // Stored as JSON in DB
 	Nutrients       *PlantNutrients          `gorm:"-" json:"nutrients"`  // For JSON API interaction
 	GrowthCycle     datatypes.JSON           `gorm:"type:jsonb" json:"-"` // Stored as JSON in DB
@@ -35,6 +36,7 @@ type Plant struct {
 	CompatiblePlants datatypes.JSONSlice[string] `gorm:"type:text[]" json:"compatiblePlants"`
 	CompanionBenefits string                 `json:"companionBenefits,omitempty"`
 	FertilizerNeed  float64                  `json:"fertilizerNeed"` // Threshold for fertilizer alerts
+	IsCommon        bool                     `json:"isCommon"` // If true, plant is part of the default library
 }
 
 // PlantNutrients represents the impact a plant has on soil nutrients

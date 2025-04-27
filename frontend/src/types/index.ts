@@ -35,6 +35,8 @@ export interface Plant {
   name: string;
   imageUrl?: string;
   description: string;
+  creatorId?: string; // Track who created this plant
+  isEditable?: boolean; // Whether the current user can edit this plant
   nutrients: {
     nitrogenImpact: number; // -10 to 10 scale, negative means consumption
     phosphorusImpact: number;

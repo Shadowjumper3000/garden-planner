@@ -1,7 +1,9 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Home, Leaf, LogOut, User, LayoutDashboard } from "lucide-react";
+import { Home, Leaf, LogOut, User, LayoutDashboard, Menu, X, Sprout } from "lucide-react";
+import { useState } from "react";
+import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,6 +11,7 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const { isAuthenticated, logout, user } = useAuth();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -50,7 +53,7 @@ const Layout = ({ children }: LayoutProps) => {
                   onClick={logout}
                   className="bg-transparent border-white text-white hover:bg-white/10"
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
+                  <LogOut className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Logout</span>
                 </Button>
               </div>
@@ -61,11 +64,105 @@ const Layout = ({ children }: LayoutProps) => {
                   size="sm"
                   className="bg-transparent border-white text-white hover:bg-white/10"
                 >
-                  <User className="h-4 w-4 mr-2" />
+                  <User className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Login</span>
                 </Button>
               </Link>
             )}
+            
+            {/* Mobile Menu Button */}
+            <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+              <SheetTrigger asChild className="flex md:hidden">
+                <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[250px] bg-garden-primary/95 text-white border-garden-primary">
+                <div className="flex flex-col space-y-6 pt-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                      <Leaf className="h-5 w-5" />
+                      <span className="font-serif font-bold">Garden Planner</span>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(false)} className="text-white hover:bg-white/10">
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                  
+                  {isAuthenticated ? (
+                    <div className="flex flex-col space-y-1">
+                      <p className="px-2 py-1 text-sm text-garden-light mb-2">
+                        Welcome, {user?.name}
+                      </p>
+                      <Link 
+                        to="/" 
+                        className="flex items-center gap-2 px-2 py-3 hover:bg-white/10 rounded-md"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <Home className="h-5 w-5" />
+                        <span>My Gardens</span>
+                      </Link>
+                      <Link 
+                        to="/plants" 
+                        className="flex items-center gap-2 px-2 py-3 hover:bg-white/10 rounded-md"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <Sprout className="h-5 w-5" />
+                        <span>Plant Library</span>
+                      </Link>
+                      {user?.role === 'admin' && (
+                        <Link 
+                          to="/admin" 
+                          className="flex items-center gap-2 px-2 py-3 hover:bg-white/10 rounded-md"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          <LayoutDashboard className="h-5 w-5" />
+                          <span>Admin Dashboard</span>
+                        </Link>
+                      )}
+                      <Button 
+                        variant="ghost" 
+                        className="flex items-center justify-start gap-2 px-2 py-3 hover:bg-white/10 hover:text-white text-white rounded-md"
+                        onClick={() => {
+                          logout();
+                          setIsMenuOpen(false);
+                        }}
+                      >
+                        <LogOut className="h-5 w-5" />
+                        <span>Logout</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col space-y-1">
+                      <Link 
+                        to="/" 
+                        className="flex items-center gap-2 px-2 py-3 hover:bg-white/10 rounded-md"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <Home className="h-5 w-5" />
+                        <span>Home</span>
+                      </Link>
+                      <Link 
+                        to="/login" 
+                        className="flex items-center gap-2 px-2 py-3 hover:bg-white/10 rounded-md"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <User className="h-5 w-5" />
+                        <span>Login</span>
+                      </Link>
+                      <Link 
+                        to="/register" 
+                        className="flex items-center gap-2 px-2 py-3 hover:bg-white/10 rounded-md"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <User className="h-5 w-5" />
+                        <span>Register</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </header>
