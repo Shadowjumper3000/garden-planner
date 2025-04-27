@@ -45,7 +45,7 @@ func SeedPlants(db *gorm.DB) error {
 	}{
 		{
 			Name:        "Tomato",
-			ImageURL:    "https://images.unsplash.com/photo-1518977676601-b53f82aba655",
+			ImageURL:    "", // Removed image URL to use placeholder
 			Description: "A popular garden vegetable that produces red, juicy fruits.",
 			Nutrients: models.PlantNutrients{
 				NitrogenImpact:   -8,
@@ -63,7 +63,7 @@ func SeedPlants(db *gorm.DB) error {
 		},
 		{
 			Name:        "Basil",
-			ImageURL:    "https://images.unsplash.com/photo-1601307636238-a6f43c0f1ec3",
+			ImageURL:    "", // Removed image URL to use placeholder
 			Description: "Aromatic herb that pairs well with tomatoes, both in the garden and in cooking.",
 			Nutrients: models.PlantNutrients{
 				NitrogenImpact:   -2,
@@ -81,7 +81,7 @@ func SeedPlants(db *gorm.DB) error {
 		},
 		{
 			Name:        "Carrot",
-			ImageURL:    "https://images.unsplash.com/photo-1598170845035-39f9d320a885",
+			ImageURL:    "", // Removed image URL to use placeholder
 			Description: "Root vegetable that grows well in loose, sandy soil.",
 			Nutrients: models.PlantNutrients{
 				NitrogenImpact:   -4,
@@ -99,7 +99,7 @@ func SeedPlants(db *gorm.DB) error {
 		},
 		{
 			Name:        "Lettuce",
-			ImageURL:    "https://images.unsplash.com/photo-1558401395-38de5d87a34e",
+			ImageURL:    "", // Removed image URL to use placeholder
 			Description: "Leafy green that grows quickly and can be harvested multiple times.",
 			Nutrients: models.PlantNutrients{
 				NitrogenImpact:   -3,
@@ -117,7 +117,7 @@ func SeedPlants(db *gorm.DB) error {
 		},
 		{
 			Name:        "Green Beans",
-			ImageURL:    "https://images.unsplash.com/photo-1567253577618-1dbf84855b91",
+			ImageURL:    "", // Removed image URL to use placeholder
 			Description: "Legume that fixes nitrogen in the soil, beneficial for garden rotation.",
 			Nutrients: models.PlantNutrients{
 				NitrogenImpact:   5,  // Nitrogen-fixing plants add nitrogen to soil
@@ -185,8 +185,11 @@ func SeedAdminUser(db *gorm.DB) error {
 
 	log.Println("Creating admin user...")
 
+	// Generate a secure random password using UUID
+	securePassword := uuid.New().String()
+	
 	// Generate password hash with proper cost factor
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(securePassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -204,7 +207,7 @@ func SeedAdminUser(db *gorm.DB) error {
 		return err
 	}
 
-	log.Println("Admin user created successfully. Email: admin@gardenplanner.com, Password: admin123")
+	log.Printf("Admin user created successfully. Email: admin@gardenplanner.com, Password: %s", securePassword)
 	return nil
 }
 
