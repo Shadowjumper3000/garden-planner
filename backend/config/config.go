@@ -35,7 +35,6 @@ type DatabaseConfig struct {
 	User     string
 	Password string
 	DBName   string
-	SSLMode  string
 }
 
 // JWTConfig holds JWT configuration
@@ -59,14 +58,13 @@ func LoadConfig() *Config {
 			WriteTimeout: time.Duration(getEnvAsInt("SERVER_WRITE_TIMEOUT", 10)) * time.Second,
 			IdleTimeout:  time.Duration(getEnvAsInt("SERVER_IDLE_TIMEOUT", 30)) * time.Second,
 		},
-		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("POSTGRES_PORT", "5432"),
-			User:     getEnv("POSTGRES_USER", "postgres"),
-			Password: getEnv("POSTGRES_PASSWORD", "postgres"),
-			DBName:   getEnv("POSTGRES_DB", "garden_planner"),
-			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
-		},
+		   Database: DatabaseConfig{
+			   Host:     getEnv("DB_HOST", "localhost"),
+			   Port:     getEnv("POSTGRES_PORT", "5432"),
+			   User:     getEnv("POSTGRES_USER", "postgres"),
+			   Password: getEnv("POSTGRES_PASSWORD", "postgres"),
+			   DBName:   getEnv("POSTGRES_DB", "garden_planner"),
+		   },
 		JWT: JWTConfig{
 			Secret:     getEnvWithRequiredCheck("JWT_SECRET", "your-secret-key", "production"),
 			Expiration: time.Duration(getEnvAsInt("JWT_EXPIRATION_HOURS", 24)) * time.Hour,

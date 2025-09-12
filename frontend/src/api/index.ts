@@ -5,10 +5,9 @@ import { Garden, Plant, SoilData, User } from '../types';
 const isDevelopment = import.meta.env.MODE === 'development';
 
 // In Docker environment, the backend is available via the container name
-// The Nginx proxy will handle routing requests to the backend
-const API_BASE_URL = isDevelopment 
-  ? '/api' // In dev, Nginx proxies /api to the backend container
-  : '/api'; // In production, also use /api which Nginx will proxy
+
+// API requests are routed externally (e.g., via Cloudflare Tunnel or external Nginx)
+const API_BASE_URL = '/api';
 
 console.log('Using API base URL:', API_BASE_URL);
 
@@ -52,7 +51,7 @@ api.interceptors.response.use(
       console.error('Network error connecting to backend:', error);
       const enhancedError = new Error(
         `Cannot connect to the backend server at ${API_BASE_URL}. ` +
-        'Please ensure the backend service is running and accessible through Nginx.'
+        'Please ensure the backend service is running and accessible through the external proxy.'
       );
       enhancedError.name = 'BackendConnectionError';
       return Promise.reject(enhancedError);
@@ -67,12 +66,12 @@ export const authAPI = {
     const response = await api.post('/auth/login', { email, password });
     return response.data;
   },
-  
+
   register: async (name: string, email: string, password: string) => {
     const response = await api.post('/auth/register', { name, email, password });
     return response.data;
   },
-  
+
   logout: () => {
     localStorage.removeItem('garden_token');
     localStorage.removeItem('garden_user');
@@ -85,31 +84,31 @@ export const gardenAPI = {
     const response = await api.get('/gardens');
     return response.data;
   },
-  
+
   getById: async (id: string): Promise<Garden> => {
     const response = await api.get(`/gardens/${id}`);
     return response.data;
   },
-  
+
   create: async (garden: Omit<Garden, 'id' | 'createdAt' | 'soilData' | 'plants'>): Promise<Garden> => {
     const response = await api.post('/gardens', garden);
     return response.data;
   },
-  
+
   update: async (id: string, garden: Partial<Omit<Garden, 'id' | 'createdAt' | 'soilData' | 'plants'>>): Promise<Garden> => {
     const response = await api.put(`/gardens/${id}`, garden);
     return response.data;
   },
-  
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/gardens/${id}`);
   },
-  
+
   updateSoil: async (id: string, soilData: SoilData): Promise<Garden> => {
     const response = await api.patch(`/gardens/${id}/soil`, { soilData });
     return response.data;
   },
-  
+
   addPlant: async (gardenId: string, plantPlacement: Omit<Garden['plants'][0], 'id'>): Promise<Garden> => {
     // Format the data according to the backend AddPlantRequest structure
     const formattedData = {
@@ -120,11 +119,11 @@ export const gardenAPI = {
         col: plantPlacement.position.col
       }
     };
-    
+
     const response = await api.post(`/gardens/${gardenId}/plants`, formattedData);
     return response.data;
   },
-  
+
   removePlant: async (gardenId: string, row: number, col: number): Promise<Garden> => {
     // Use a more RESTful URL structure with query parameters
     const response = await api.delete(`/gardens/${gardenId}/plants?row=${row}&col=${col}`);
@@ -138,48 +137,48 @@ export const plantAPI = {
     const response = await api.get('/plants');
     return response.data;
   },
-  
+
   getById: async (id: string): Promise<Plant> => {
     const response = await api.get(`/plants/${id}`);
     return response.data;
   },
-  
+
   create: async (plant: Omit<Plant, 'id' | 'creatorId' | 'isEditable'>): Promise<Plant> => {
     const response = await api.post('/plants', plant);
     // Plant creation will now be logged in activity log on the backend
     return response.data;
   },
-  
+
   update: async (id: string, plant: Partial<Omit<Plant, 'id' | 'creatorId' | 'isEditable'>>): Promise<Plant> => {
     // This will only work if the user is the creator
     const response = await api.put(`/plants/${id}`, plant);
     return response.data;
   },
-  
+
   delete: async (id: string): Promise<void> => {
     // This will only work if the user is the creator
     await api.delete(`/plants/${id}`);
   },
-  
+
   // New method to copy a plant (creating a new plant based on an existing one)
   copyPlant: async (id: string, modifications?: Partial<Omit<Plant, 'id' | 'creatorId' | 'isEditable'>>): Promise<Plant> => {
     // Create a copy that will belong to the current user
     const response = await api.post(`/plants/${id}/copy`, modifications || {});
     return response.data;
   },
-  
+
   // Get plants created by the user
   getMyPlants: async (): Promise<Plant[]> => {
     const response = await api.get('/plants/my-plants');
     return response.data;
   },
-  
+
   // Get recent plants the user has interacted with
   getRecentPlants: async (): Promise<Plant[]> => {
     const response = await api.get('/plants/recent');
     return response.data;
   },
-  
+
   // Get shared plants (created by other users)
   getSharedPlants: async (): Promise<Plant[]> => {
     const response = await api.get('/plants/shared');
@@ -206,7 +205,7 @@ export const adminAPI = {
 
       const response = await api.get(url);
       console.log('Raw API response:', response);
-      
+
       // Ensure we return a proper data structure even if the response is unexpected
       const data = response.data || {};
       return {
@@ -226,7 +225,7 @@ export const adminAPI = {
       };
     }
   },
-  
+
   getUserActivities: async (page: number = 1, pageSize: number = 10, filters?: { activityType?: string, userId?: string }): Promise<any> => {
     try {
       let url = `/admin/activities?page=${page}&pageSize=${pageSize}`;
@@ -258,7 +257,7 @@ export const adminAPI = {
       };
     }
   },
-  
+
   getMetrics: async (): Promise<any> => {
     try {
       const response = await api.get('/admin/metrics');
@@ -277,22 +276,22 @@ export const adminAPI = {
       };
     }
   },
-  
+
   getDailyMetrics: async (startDate?: string, endDate?: string, metricTypes?: string[]): Promise<any> => {
     let url = '/admin/metrics/daily';
     const params = new URLSearchParams();
-    
+
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     if (metricTypes && metricTypes.length) {
       metricTypes.forEach(type => params.append('metricType', type));
     }
-    
+
     const queryString = params.toString();
     if (queryString) {
       url += `?${queryString}`;
     }
-    
+
     try {
       const response = await api.get(url);
       return Array.isArray(response.data) ? response.data : [];
@@ -301,7 +300,7 @@ export const adminAPI = {
       return [];
     }
   },
-  
+
   getSystemStats: async (): Promise<any> => {
     try {
       const response = await api.get('/admin/metrics/system');
@@ -311,7 +310,7 @@ export const adminAPI = {
       return [];
     }
   },
-  
+
   setUserRole: async (userId: string, role: 'user' | 'admin'): Promise<any> => {
     try {
       const response = await api.put(`/admin/users/${userId}/role`, { role });
@@ -321,7 +320,7 @@ export const adminAPI = {
       throw error;
     }
   },
-  
+
   generateDailyMetrics: async (): Promise<any> => {
     try {
       const response = await api.post('/admin/metrics/generate');

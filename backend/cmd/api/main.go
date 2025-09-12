@@ -61,14 +61,13 @@ func main() {
 	}
 
 	// Connect to database
-	dbConfig := &database.Config{
-		Host:     cfg.Database.Host,
-		Port:     cfg.Database.Port,
-		User:     cfg.Database.User,
-		Password: cfg.Database.Password,
-		DBName:   cfg.Database.DBName,
-		SSLMode:  cfg.Database.SSLMode,
-	}
+	   dbConfig := &database.Config{
+		   Host:     cfg.Database.Host,
+		   Port:     cfg.Database.Port,
+		   User:     cfg.Database.User,
+		   Password: cfg.Database.Password,
+		   DBName:   cfg.Database.DBName,
+	   }
 
 	db, err := database.NewConnection(dbConfig)
 	if err != nil {
