@@ -3,8 +3,9 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy package.json and install dependencies
-COPY package*.json ./
+
+# Copy only dependency files for better caching
+COPY package.json package-lock.json bun.lockb ./
 RUN npm ci
 
 # Copy the rest of the application code

@@ -1,0 +1,13 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start All (dev)",
+            "type": "shell",
+            "command": "docker compose -f docker-compose.dev.yml up",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "Starts all services in development mode using Docker Compose."
+        }
+    ]
+}
