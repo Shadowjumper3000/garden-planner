@@ -44,7 +44,7 @@ A full-stack garden planning application with time-aware soil simulation and pla
 
 4. Start the development environment:
    ```bash
-   docker-compose -f docker-compose.dev.yml up
+   docker-compose -f infra/docker-compose.dev.yml up
    ```
 
    This will start:
@@ -131,8 +131,8 @@ A full-stack garden planning application with time-aware soil simulation and pla
 ├── frontend/              # React frontend code
 ├── scripts/               # Utility scripts
 ├── ssl/                   # SSL certificates (not included in repository)
-├── docker-compose.yml     # Production Docker configuration
-└── docker-compose.dev.yml # Development Docker configuration
+├── infra/docker-compose.yml     # Production Docker configuration
+└── infra/docker-compose.dev.yml # Development Docker configuration
 ```
 
 ## Environment Variables

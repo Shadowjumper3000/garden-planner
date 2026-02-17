@@ -23,7 +23,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
+      dockerfile: ../infra/app.Dockerfile
     container_name: garden_planner_dev_backend
     image: garden_planner_dev_backend
     ports:

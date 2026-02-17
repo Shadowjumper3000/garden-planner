@@ -1,0 +1,28 @@
+version: '3.9'
+extends:
+  file: docker-compose.base.yml
+services:
+  backend:
+    <<: *backend
+    environment:
+      - ENV=production
+    expose:
+      - "8080"
+    networks:
+      - proxy
+  frontend:
+    <<: *frontend
+    environment:
+      - ENV=production
+    expose:
+      - "80"
+    networks:
+      - proxy
+  db:
+    <<: *db
+    environment:
+      - POSTGRES_DB=garden
+      - POSTGRES_USER=garden
+      - POSTGRES_PASSWORD=garden
+    networks:
+      - proxy

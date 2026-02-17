@@ -2,12 +2,12 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Start All (dev)",
+            "label": "Build & Start All (dev)",
             "type": "shell",
-            "command": "docker compose -f docker-compose.dev.yml up",
+            "command": "docker compose -f infra/docker-compose.dev.yml up --build",
             "problemMatcher": [],
             "group": "build",
-            "detail": "Starts all services in development mode using Docker Compose."
+            "detail": "Builds and starts all services in development mode using Docker Compose."
         }
     ]
 }

@@ -1,0 +1,47 @@
+version: '3.9'
+
+x-backend: &backend
+  build:
+    context: ../src/backend
+    dockerfile: ../infra/app.Dockerfile
+  container_name: garden_backend
+  volumes:
+    - backend_data:/app/data
+  environment:
+    - ENV=production
+  networks:
+    - proxy
+
+x-frontend: &frontend
+  build:
+    context: ../web/frontend
+    dockerfile: ../infra/web-frontend.Dockerfile
+  container_name: garden_frontend
+  volumes:
+    - frontend_data:/app/node_modules
+  environment:
+    - ENV=production
+  networks:
+    - proxy
+
+x-db: &db
+  image: postgres:16
+  container_name: garden_db
+  volumes:
+    - db_data:/var/lib/postgresql/data
+    - ../db/seed:/docker-entrypoint-initdb.d
+  environment:
+    - POSTGRES_DB=garden
+    - POSTGRES_USER=garden
+    - POSTGRES_PASSWORD=garden
+  networks:
+    - proxy
+
+volumes:
+  backend_data:
+  frontend_data:
+  db_data:
+
+networks:
+  proxy:
+    external: true

@@ -29,7 +29,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: ../infra/app.Dockerfile
     container_name: ${PROJECT_NAME}_backend
     image: ${PROJECT_NAME}_backend
     environment:
