@@ -17,18 +17,18 @@ type Garden struct {
 	ID        string    `db:"id" json:"id"`
 	UserID    int       `db:"user_id" json:"userId"`
 	Name      string    `db:"name" json:"name"`
-	Rows      int       `db:"rows" json:"rows"`
-	Columns   int       `db:"columns" json:"columns"`
+	WidthM    float64   `db:"width_m" json:"widthM"`
+	HeightM   float64   `db:"height_m" json:"heightM"`
 	CreatedAt time.Time `db:"created_at" json:"createdAt"`
 	UpdatedAt time.Time `db:"updated_at" json:"updatedAt"`
 }
 
-// SoilCell represents soil state for one grid cell
+// SoilCell represents soil state for a 0.5m x 0.5m patch
 type SoilCell struct {
 	ID          string    `db:"id" json:"id"`
 	GardenID    string    `db:"garden_id" json:"gardenId"`
-	RowIdx      int       `db:"row_idx" json:"row"`
-	ColIdx      int       `db:"col_idx" json:"col"`
+	XM          float64   `db:"x_m" json:"x"`
+	YM          float64   `db:"y_m" json:"y"`
 	Moisture    float64   `db:"moisture" json:"moisture"`
 	Nitrogen    float64   `db:"nitrogen" json:"nitrogen"`
 	Phosphorus  float64   `db:"phosphorus" json:"phosphorus"`
@@ -41,8 +41,6 @@ type SoilCell struct {
 type SoilHistory struct {
 	ID         string    `db:"id" json:"id"`
 	GardenID   string    `db:"garden_id" json:"gardenId"`
-	RowIdx     int       `db:"row_idx" json:"row"`
-	ColIdx     int       `db:"col_idx" json:"col"`
 	Snapshot   []byte    `db:"snapshot" json:"snapshot"`
 	RecordedAt time.Time `db:"recorded_at" json:"recordedAt"`
 }
@@ -61,6 +59,8 @@ type Plant struct {
 	GerminationDays   int       `db:"germination_days" json:"germinationDays"`
 	MaturityDays      int       `db:"maturity_days" json:"maturityDays"`
 	HarvestDays       int       `db:"harvest_days" json:"harvestDays"`
+	WidthM            float64   `db:"width_m" json:"widthM"`
+	HeightM           float64   `db:"height_m" json:"heightM"`
 	IsPublic          bool      `db:"is_public" json:"isPublic"`
 	CreatedAt         time.Time `db:"created_at" json:"createdAt"`
 }
@@ -74,14 +74,16 @@ type PlantRelationship struct {
 	BenefitDescription  string `db:"benefit_description" json:"benefitDescription"`
 }
 
-// PlantPlacement in a garden grid cell
+// PlantPlacement in a garden (position in metres)
 type PlantPlacement struct {
-	ID          string    `db:"id" json:"id"`
-	GardenID    string    `db:"garden_id" json:"gardenId"`
-	PlantID     string    `db:"plant_id" json:"plantId"`
-	RowIdx      int       `db:"row_idx" json:"row"`
-	ColIdx      int       `db:"col_idx" json:"col"`
-	PlantedDate string    `db:"planted_date" json:"plantedDate"`
+	ID          string  `db:"id" json:"id"`
+	GardenID    string  `db:"garden_id" json:"gardenId"`
+	PlantID     string  `db:"plant_id" json:"plantId"`
+	XM          float64 `db:"x_m" json:"x"`
+	YM          float64 `db:"y_m" json:"y"`
+	WidthM      float64 `db:"width_m" json:"widthM"`
+	HeightM     float64 `db:"height_m" json:"heightM"`
+	PlantedDate string  `db:"planted_date" json:"plantedDate"`
 }
 
 // Notification for a user

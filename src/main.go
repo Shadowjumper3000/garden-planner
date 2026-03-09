@@ -86,7 +86,8 @@ func main() {
 
 		// Plant placements
 		r.Post("/api/gardens/{id}/plants", handlers.AddPlantToGarden(db))
-		r.Delete("/api/gardens/{id}/plants", handlers.RemovePlantFromGarden(db))
+		r.Put("/api/gardens/{id}/plants/{placementId}", handlers.MovePlantInGarden(db))
+		r.Delete("/api/gardens/{id}/plants/{placementId}", handlers.RemovePlantFromGarden(db))
 
 		// Plant library
 		r.Get("/api/plants", handlers.ListPlants(db))

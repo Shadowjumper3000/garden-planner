@@ -90,12 +90,12 @@ export const gardenAPI = {
     return response.data;
   },
 
-  create: async (garden: Omit<Garden, 'id' | 'createdAt' | 'soilData' | 'plants'>): Promise<Garden> => {
+  create: async (garden: { name: string; widthM: number; heightM: number }): Promise<Garden> => {
     const response = await api.post('/gardens', garden);
     return response.data;
   },
 
-  update: async (id: string, garden: Partial<Omit<Garden, 'id' | 'createdAt' | 'soilData' | 'plants'>>): Promise<Garden> => {
+  update: async (id: string, garden: { name?: string; widthM?: number; heightM?: number }): Promise<Garden> => {
     const response = await api.put(`/gardens/${id}`, garden);
     return response.data;
   },
@@ -109,24 +109,37 @@ export const gardenAPI = {
     return response.data;
   },
 
-  addPlant: async (gardenId: string, plantPlacement: Omit<Garden['plants'][0], 'id'>): Promise<Garden> => {
-    // Format the data according to the backend AddPlantRequest structure
-    const formattedData = {
-      plantId: plantPlacement.plantId,
-      date: plantPlacement.plantedDate ? new Date(plantPlacement.plantedDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      position: {
-        row: plantPlacement.position.row,
-        col: plantPlacement.position.col
-      }
-    };
-
-    const response = await api.post(`/gardens/${gardenId}/plants`, formattedData);
+  addPlant: async (gardenId: string, placement: {
+    plantId: string;
+    date?: string;
+    x: number;
+    y: number;
+    widthM: number;
+    heightM: number;
+  }): Promise<Garden> => {
+    const response = await api.post(`/gardens/${gardenId}/plants`, {
+      plantId: placement.plantId,
+      date: placement.date || new Date().toISOString().split('T')[0],
+      x: placement.x,
+      y: placement.y,
+      widthM: placement.widthM,
+      heightM: placement.heightM,
+    });
     return response.data;
   },
 
-  removePlant: async (gardenId: string, row: number, col: number): Promise<Garden> => {
-    // Use a more RESTful URL structure with query parameters
-    const response = await api.delete(`/gardens/${gardenId}/plants?row=${row}&col=${col}`);
+  movePlant: async (gardenId: string, placementId: string, position: {
+    x: number;
+    y: number;
+    widthM: number;
+    heightM: number;
+  }): Promise<Garden> => {
+    const response = await api.put(`/gardens/${gardenId}/plants/${placementId}`, position);
+    return response.data;
+  },
+
+  removePlant: async (gardenId: string, placementId: string): Promise<Garden> => {
+    const response = await api.delete(`/gardens/${gardenId}/plants/${placementId}`);
     return response.data;
   }
 };
@@ -144,42 +157,70 @@ export const plantAPI = {
   },
 
   create: async (plant: Omit<Plant, 'id' | 'creatorId' | 'isEditable'>): Promise<Plant> => {
-    const response = await api.post('/plants', plant);
-    // Plant creation will now be logged in activity log on the backend
+    // Flatten nested structs for the backend
+    const body = {
+      name: plant.name,
+      imageUrl: plant.imageUrl || '',
+      description: plant.description,
+      nitrogenImpact: plant.nutrients.nitrogenImpact,
+      phosphorusImpact: plant.nutrients.phosphorusImpact,
+      potassiumImpact: plant.nutrients.potassiumImpact,
+      germinationDays: plant.growthCycle.germination,
+      maturityDays: plant.growthCycle.maturity,
+      harvestDays: plant.growthCycle.harvest,
+      widthM: plant.size.widthM,
+      heightM: plant.size.heightM,
+      compatiblePlants: plant.compatiblePlants || [],
+      companionBenefits: plant.companionBenefits || '',
+    };
+    const response = await api.post('/plants', body);
     return response.data;
   },
 
   update: async (id: string, plant: Partial<Omit<Plant, 'id' | 'creatorId' | 'isEditable'>>): Promise<Plant> => {
-    // This will only work if the user is the creator
-    const response = await api.put(`/plants/${id}`, plant);
+    const body: Record<string, unknown> = {};
+    if (plant.name !== undefined) body.name = plant.name;
+    if (plant.imageUrl !== undefined) body.imageUrl = plant.imageUrl || '';
+    if (plant.description !== undefined) body.description = plant.description;
+    if (plant.nutrients) {
+      body.nitrogenImpact = plant.nutrients.nitrogenImpact;
+      body.phosphorusImpact = plant.nutrients.phosphorusImpact;
+      body.potassiumImpact = plant.nutrients.potassiumImpact;
+    }
+    if (plant.growthCycle) {
+      body.germinationDays = plant.growthCycle.germination;
+      body.maturityDays = plant.growthCycle.maturity;
+      body.harvestDays = plant.growthCycle.harvest;
+    }
+    if (plant.size) {
+      body.widthM = plant.size.widthM;
+      body.heightM = plant.size.heightM;
+    }
+    if (plant.compatiblePlants !== undefined) body.compatiblePlants = plant.compatiblePlants;
+    if (plant.companionBenefits !== undefined) body.companionBenefits = plant.companionBenefits;
+    const response = await api.put(`/plants/${id}`, body);
     return response.data;
   },
 
   delete: async (id: string): Promise<void> => {
-    // This will only work if the user is the creator
     await api.delete(`/plants/${id}`);
   },
 
-  // New method to copy a plant (creating a new plant based on an existing one)
   copyPlant: async (id: string, modifications?: Partial<Omit<Plant, 'id' | 'creatorId' | 'isEditable'>>): Promise<Plant> => {
-    // Create a copy that will belong to the current user
     const response = await api.post(`/plants/${id}/copy`, modifications || {});
     return response.data;
   },
 
-  // Get plants created by the user
   getMyPlants: async (): Promise<Plant[]> => {
     const response = await api.get('/plants/my-plants');
     return response.data;
   },
 
-  // Get recent plants the user has interacted with
   getRecentPlants: async (): Promise<Plant[]> => {
     const response = await api.get('/plants/recent');
     return response.data;
   },
 
-  // Get shared plants (created by other users)
   getSharedPlants: async (): Promise<Plant[]> => {
     const response = await api.get('/plants/shared');
     return response.data;

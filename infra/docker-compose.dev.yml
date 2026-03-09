@@ -13,7 +13,7 @@
 
 services:
   db:
-    container_name: garden-planner-db-dev
+    container_name: garden-planner-db
     ports:
       - "${DB_PORT:-5432}:5432"
     environment:
@@ -22,7 +22,7 @@ services:
       - internal
 
   backend:
-    container_name: garden-planner-backend-dev
+    container_name: garden-planner-backend
     build:
       context: ../src
       dockerfile: ../infra/app.Dockerfile
@@ -40,7 +40,7 @@ services:
       JWT_EXPIRATION_HOURS: 24
       CORS_ALLOW_ORIGINS: "http://localhost,http://localhost:8000"
       CORS_ALLOW_CREDENTIALS: "true"
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@localhost}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@gardenplanner.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-adminpassword}
       ADMIN_NAME: ${ADMIN_NAME:-Admin}
     networks:
@@ -49,7 +49,7 @@ services:
   frontend:
     # Full nginx build — serves at port 80 and reverse-proxies /api → backend.
     # Rebuild after frontend changes: docker compose up --build --no-deps frontend
-    container_name: garden-planner-frontend-dev
+    container_name: garden-planner-frontend
     build:
       context: ../web
       dockerfile: ../infra/web-frontend.Dockerfile
@@ -63,7 +63,7 @@ services:
       - internal
 
   grafana:
-    container_name: garden-planner-grafana-dev
+    container_name: garden-planner-grafana
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
     environment:
@@ -78,4 +78,4 @@ services:
 networks:
   internal:
     driver: bridge
-    name: garden-planner-dev
+    name: garden-planner-internal

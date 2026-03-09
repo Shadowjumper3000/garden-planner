@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: ${PROJECT_NAME}_postgres
+    container_name: garden-planner-postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -14,7 +14,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - garden-network
+      - garden-planner-network
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -30,8 +30,8 @@ services:
     build:
       context: ./backend
       dockerfile: ../infra/app.Dockerfile
-    container_name: ${PROJECT_NAME}_backend
-    image: ${PROJECT_NAME}_backend
+    container_name: garden-planner-backend
+    image: garden-planner-backend
     environment:
       SERVER_PORT: 8080
       GIN_MODE: release
@@ -59,7 +59,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - garden-network
+      - garden-planner-network
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -72,14 +72,14 @@ services:
       context: ./frontend
       args:
         - VITE_API_URL=${API_URL}
-    container_name: ${PROJECT_NAME}_frontend
-    image: ${PROJECT_NAME}_frontend
+    container_name: garden-planner-frontend
+    image: garden-planner-frontend
     ports:
       - "${WEB_PORT}:80"
     depends_on:
       - backend
     networks:
-      - garden-network
+      - garden-planner-network
       - cloudflared
     restart: unless-stopped
     logging:
@@ -92,11 +92,11 @@ services:
 
 volumes:
   postgres_data:
-    name: ${PROJECT_NAME}_postgres_data
+    name: garden-planner-postgres-data
 
 networks:
-  garden-network:
-    name: ${PROJECT_NAME}_network
+  garden-planner-network:
+    name: garden-planner-network
     driver: bridge
   cloudflared:
     external: true

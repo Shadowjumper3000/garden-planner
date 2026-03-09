@@ -1,39 +1,43 @@
 export interface Garden {
   id: string;
   name: string;
-  rows: number;
-  columns: number;
+  widthM: number;
+  heightM: number;
   plants: PlantPlacement[];
   soilData: SoilData;
   createdAt: string;
 }
 
 export interface PlantPlacement {
+  id: string;
   plantId: string;
-  position: {
-    row: number;
-    col: number;
-  };
+  x: number;       // left edge in metres
+  y: number;       // top edge in metres
+  widthM: number;
+  heightM: number;
   plantedDate: string;
 }
 
 export interface SoilData {
-  cells: SoilCell[][];
+  cells: SoilCell[];
+  resolution: number;  // cell size in metres (0.5)
   lastUpdated: string;
 }
 
 export interface SoilCell {
-  moisture: number; // 0-100%
-  nitrogen: number; // 0-100%
-  phosphorus: number; // 0-100%
-  potassium: number; // 0-100%
-  ph: number; // 0-14 scale
+  x: number;       // top-left corner in metres
+  y: number;
+  moisture: number;    // 0–100 %
+  nitrogen: number;    // 0–100 %
+  phosphorus: number;  // 0–100 %
+  potassium: number;   // 0–100 %
+  ph: number;          // 0–14 scale
 }
 
 export interface SoilHistoryEntry {
   recordedAt: string;
-  cells: SoilCell[][];
-  /** Pre-computed average used by the scroll wheel gauge */
+  cells: SoilCell[];
+  /** Pre-computed averages used by the scroll wheel gauge */
   avgMoisture?: number;
   avgNitrogen?: number;
   avgPhosphorus?: number;
@@ -45,19 +49,23 @@ export interface Plant {
   name: string;
   imageUrl?: string;
   description: string;
-  creatorId?: string;
+  creatorId?: number | null;
   isEditable?: boolean;
+  size: {
+    widthM: number;    // default footprint width in metres
+    heightM: number;   // default footprint height in metres
+  };
   nutrients: {
-    nitrogenImpact: number; // -10 to 10 scale, negative means consumption
+    nitrogenImpact: number;    // -10 to 10 scale
     phosphorusImpact: number;
     potassiumImpact: number;
   };
-  compatiblePlants: string[];
+  compatiblePlants: string[];     // companion plant IDs
   companionBenefits?: string;
   growthCycle: {
     germination: number; // days
-    maturity: number; // days
-    harvest: number; // days
+    maturity: number;    // days
+    harvest: number;     // days
   };
 }
 

@@ -18,8 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 
 const createGardenSchema = z.object({
   name: z.string().min(2, "Garden name must be at least 2 characters"),
-  rows: z.number().min(1, "Must have at least 1 row").max(20, "Maximum 20 rows"),
-  columns: z.number().min(1, "Must have at least 1 column").max(20, "Maximum 20 columns"),
+  widthM: z.number().min(0.5, "Width must be at least 0.5 m").max(50, "Maximum 50 m"),
+  heightM: z.number().min(0.5, "Height must be at least 0.5 m").max(50, "Maximum 50 m"),
 });
 
 type CreateGardenFormValues = z.infer<typeof createGardenSchema>;
@@ -61,8 +61,8 @@ const HomePage = () => {
     resolver: zodResolver(createGardenSchema),
     defaultValues: {
       name: "",
-      rows: 8,
-      columns: 10,
+      widthM: 5,
+      heightM: 5,
     },
   });
   
@@ -149,29 +149,31 @@ const HomePage = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="rows">Rows</Label>
+                          <Label htmlFor="widthM">Width (m)</Label>
                           <Input 
-                            id="rows"
+                            id="widthM"
                             type="number" 
-                            min={1}
-                            max={20}
-                            {...register("rows", { valueAsNumber: true })} 
+                            min={0.5}
+                            max={50}
+                            step={0.5}
+                            {...register("widthM", { valueAsNumber: true })} 
                           />
-                          {errors.rows && (
-                            <p className="text-sm text-destructive">{errors.rows.message}</p>
+                          {errors.widthM && (
+                            <p className="text-sm text-destructive">{errors.widthM.message}</p>
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="columns">Columns</Label>
+                          <Label htmlFor="heightM">Height (m)</Label>
                           <Input 
-                            id="columns"
+                            id="heightM"
                             type="number" 
-                            min={1}
-                            max={20}
-                            {...register("columns", { valueAsNumber: true })} 
+                            min={0.5}
+                            max={50}
+                            step={0.5}
+                            {...register("heightM", { valueAsNumber: true })} 
                           />
-                          {errors.columns && (
-                            <p className="text-sm text-destructive">{errors.columns.message}</p>
+                          {errors.heightM && (
+                            <p className="text-sm text-destructive">{errors.heightM.message}</p>
                           )}
                         </div>
                       </div>
@@ -210,27 +212,25 @@ const HomePage = () => {
                           </div>
                         </div>
                         <CardDescription>
-                          {garden.rows}×{garden.columns} grid
+                          {garden.widthM} m × {garden.heightM} m
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="pb-2">
                         <div 
-                          className="soil-grid w-full h-32 grid"
-                          style={{ 
-                            gridTemplateRows: `repeat(${Math.min(garden.rows, 8)}, 1fr)`,
-                            gridTemplateColumns: `repeat(${Math.min(garden.columns, 10)}, 1fr)`
-                          }}
+                          className="w-full h-32 rounded overflow-hidden border relative bg-amber-50"
                         >
-                          {Array.from({ length: Math.min(garden.rows, 8) }).map((_, rowIndex) => (
-                            Array.from({ length: Math.min(garden.columns, 10) }).map((_, colIndex) => (
-                              <div 
-                                key={`${rowIndex}-${colIndex}`}
-                                className="soil-cell"
-                                style={{
-                                  backgroundColor: `rgba(94, 75, 62, ${0.1 + Math.random() * 0.3})`
-                                }}
-                              />
-                            ))
+                          {/* Simple soil preview - scatter some green patches */}
+                          {[...Array(8)].map((_, i) => (
+                            <div
+                              key={i}
+                              className="absolute rounded-full bg-garden-primary/20"
+                              style={{
+                                left: `${10 + (i * 11) % 80}%`,
+                                top: `${15 + (i * 17) % 65}%`,
+                                width: `${8 + (i * 7) % 12}%`,
+                                height: `${8 + (i * 5) % 12}%`,
+                              }}
+                            />
                           ))}
                         </div>
                       </CardContent>

@@ -41,7 +41,7 @@ type GardenRepository interface {
 	// Plant placements
 	GetPlacements(gardenID string) ([]database.PlantPlacement, error)
 	AddPlacement(p *database.PlantPlacement) (*database.PlantPlacement, error)
-	RemovePlacement(gardenID string, row, col int) error
+	RemovePlacement(gardenID, placementID string) error
 }
 
 // ─── Plant ────────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ type NotificationRepository interface {
 
 // ActivityRepository logs user actions for auditing.
 type ActivityRepository interface {
-	Log(userID int, action, entityType, entityID, details string) error
+	Log(userID int, activityType, details string) error
 	List(limit, offset int) ([]database.ActivityLog, error)
 	Count() (int, error)
 }

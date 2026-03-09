@@ -15,40 +15,38 @@ func AutoMigrate(db *sql.DB) error {
 			role          TEXT NOT NULL DEFAULT 'user',
 			created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
-		// Gardens
+		// Gardens (meter-based dimensions)
 		`CREATE TABLE IF NOT EXISTS gardens (
 			id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id    INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			name       TEXT NOT NULL,
-			rows       INT  NOT NULL DEFAULT 5,
-			columns    INT  NOT NULL DEFAULT 5,
+			width_m    NUMERIC(6,2) NOT NULL DEFAULT 5.0,
+			height_m   NUMERIC(6,2) NOT NULL DEFAULT 5.0,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
-		// Soil cells
+		// Soil cells (x_m/y_m are 0.5m-resolution coords)
 		`CREATE TABLE IF NOT EXISTS soil_cells (
 			id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			garden_id   UUID NOT NULL REFERENCES gardens(id) ON DELETE CASCADE,
-			row_idx     INT  NOT NULL,
-			col_idx     INT  NOT NULL,
+			x_m         NUMERIC(6,3) NOT NULL,
+			y_m         NUMERIC(6,3) NOT NULL,
 			moisture    NUMERIC(5,2) NOT NULL DEFAULT 50,
 			nitrogen    NUMERIC(5,2) NOT NULL DEFAULT 50,
 			phosphorus  NUMERIC(5,2) NOT NULL DEFAULT 50,
 			potassium   NUMERIC(5,2) NOT NULL DEFAULT 50,
 			ph          NUMERIC(4,2) NOT NULL DEFAULT 7.0,
 			recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-			UNIQUE(garden_id, row_idx, col_idx)
+			UNIQUE(garden_id, x_m, y_m)
 		)`,
-		// Soil history
+		// Soil history (full garden snapshot)
 		`CREATE TABLE IF NOT EXISTS soil_history (
 			id          UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
 			garden_id   UUID  NOT NULL REFERENCES gardens(id) ON DELETE CASCADE,
-			row_idx     INT   NOT NULL,
-			col_idx     INT   NOT NULL,
 			snapshot    JSONB NOT NULL,
 			recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
-		// Plants
+		// Plants (with size)
 		`CREATE TABLE IF NOT EXISTS plants (
 			id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			creator_id        INT  REFERENCES users(id) ON DELETE SET NULL,
@@ -62,6 +60,8 @@ func AutoMigrate(db *sql.DB) error {
 			germination_days  INT  NOT NULL DEFAULT 7,
 			maturity_days     INT  NOT NULL DEFAULT 60,
 			harvest_days      INT  NOT NULL DEFAULT 90,
+			width_m           NUMERIC(4,2) NOT NULL DEFAULT 0.5,
+			height_m          NUMERIC(4,2) NOT NULL DEFAULT 0.5,
 			is_public         BOOLEAN NOT NULL DEFAULT true,
 			created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
@@ -74,15 +74,16 @@ func AutoMigrate(db *sql.DB) error {
 			benefit_description TEXT NOT NULL DEFAULT '',
 			UNIQUE(plant_a_id, plant_b_id)
 		)`,
-		// Plant placements
+		// Plant placements (free-form metre positions)
 		`CREATE TABLE IF NOT EXISTS plant_placements (
 			id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			garden_id    UUID NOT NULL REFERENCES gardens(id) ON DELETE CASCADE,
 			plant_id     UUID NOT NULL REFERENCES plants(id),
-			row_idx      INT  NOT NULL,
-			col_idx      INT  NOT NULL,
-			planted_date DATE NOT NULL DEFAULT CURRENT_DATE,
-			UNIQUE(garden_id, row_idx, col_idx)
+			x_m          NUMERIC(6,3) NOT NULL DEFAULT 0,
+			y_m          NUMERIC(6,3) NOT NULL DEFAULT 0,
+			width_m      NUMERIC(4,2) NOT NULL DEFAULT 0.5,
+			height_m     NUMERIC(4,2) NOT NULL DEFAULT 0.5,
+			planted_date DATE NOT NULL DEFAULT CURRENT_DATE
 		)`,
 		// Notifications
 		`CREATE TABLE IF NOT EXISTS notifications (
@@ -107,12 +108,12 @@ func AutoMigrate(db *sql.DB) error {
 			created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
 		// Indexes
-		`CREATE INDEX IF NOT EXISTS idx_gardens_user_id     ON gardens(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_soil_cells_garden   ON soil_cells(garden_id, row_idx, col_idx)`,
+		`CREATE INDEX IF NOT EXISTS idx_gardens_user_id    ON gardens(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_soil_cells_garden  ON soil_cells(garden_id, x_m, y_m)`,
 		`CREATE INDEX IF NOT EXISTS idx_soil_history_garden ON soil_history(garden_id, recorded_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_placements_garden   ON plant_placements(garden_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_notifications_user  ON notifications(user_id, read_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_activity_user       ON activity_logs(user_id, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_placements_garden  ON plant_placements(garden_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_activity_user      ON activity_logs(user_id, created_at)`,
 	}
 	for _, q := range migrations {
 		if _, err := db.Exec(q); err != nil {
@@ -121,3 +122,4 @@ func AutoMigrate(db *sql.DB) error {
 	}
 	return nil
 }
+

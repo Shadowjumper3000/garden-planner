@@ -1,16 +1,16 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 WORKDIR /app
 
 # Install build tools
 RUN apk add --no-cache git
 
 # Copy dependency files first for layer caching
-COPY go.mod go.sum* ./
-RUN go mod download || go mod tidy
+COPY go.mod go.sum ./
+RUN go mod download
 
 # Copy source and build
 COPY . .
-RUN go mod tidy && go build -o server ./...
+RUN go build -o server .
 
 FROM alpine:latest
 RUN apk add --no-cache wget ca-certificates

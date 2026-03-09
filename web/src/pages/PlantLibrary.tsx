@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +31,8 @@ const addPlantSchema = z.object({
   germinationDays: z.number().min(1),
   maturityDays: z.number().min(1),
   harvestDays: z.number().min(1),
+  widthM: z.number().min(0.1, "Min 0.1m").max(10, "Max 10m"),
+  heightM: z.number().min(0.1, "Min 0.1m").max(10, "Max 10m"),
   compatiblePlants: z.string().default(""),
   companionBenefits: z.string().default("")
 });
@@ -46,7 +48,7 @@ const PlantLibrary = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentPlant, setCurrentPlant] = useState<Plant | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState("generic");
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
 
@@ -87,6 +89,11 @@ const PlantLibrary = () => {
       }
     },
   });
+
+  const plantNameMap = useMemo(
+    () => new Map(plants.map(p => [p.id, p.name])),
+    [plants]
+  );
 
   const addPlantMutation = useMutation({
     mutationFn: async (newPlant: Omit<Plant, 'id'>) => {
@@ -133,6 +140,8 @@ const PlantLibrary = () => {
       germinationDays: 7,
       maturityDays: 60,
       harvestDays: 90,
+      widthM: 0.5,
+      heightM: 0.5,
       compatiblePlants: "",
       companionBenefits: "",
     },
@@ -156,6 +165,8 @@ const PlantLibrary = () => {
       germinationDays: 7,
       maturityDays: 60,
       harvestDays: 90,
+      widthM: 0.5,
+      heightM: 0.5,
       compatiblePlants: "",
       companionBenefits: "",
     },
@@ -175,6 +186,10 @@ const PlantLibrary = () => {
           nitrogenImpact: data.nitrogenImpact,
           phosphorusImpact: data.phosphorusImpact,
           potassiumImpact: data.potassiumImpact,
+        },
+        size: {
+          widthM: data.widthM,
+          heightM: data.heightM,
         },
         compatiblePlants: companionPlants,
         companionBenefits: data.companionBenefits || undefined,
@@ -216,6 +231,8 @@ const PlantLibrary = () => {
     setValue("germinationDays", plant.growthCycle.germination);
     setValue("maturityDays", plant.growthCycle.maturity);
     setValue("harvestDays", plant.growthCycle.harvest);
+    setValue("widthM",  plant.size?.widthM  ?? 0.5);
+    setValue("heightM", plant.size?.heightM ?? 0.5);
 
     setValue("compatiblePlants", plant.compatiblePlants ? plant.compatiblePlants.join(', ') : "");
     setValue("companionBenefits", plant.companionBenefits || "");
@@ -239,6 +256,10 @@ const PlantLibrary = () => {
           nitrogenImpact: data.nitrogenImpact,
           phosphorusImpact: data.phosphorusImpact,
           potassiumImpact: data.potassiumImpact,
+        },
+        size: {
+          widthM: data.widthM,
+          heightM: data.heightM,
         },
         compatiblePlants: companionPlants,
         companionBenefits: data.companionBenefits || undefined,
@@ -336,13 +357,15 @@ const PlantLibrary = () => {
     let plantsToFilter: Plant[] = [];
 
     switch(activeTab) {
+      case "generic":
+        plantsToFilter = plants.filter(p => !p.creatorId);
+        break;
       case "my-plants":
         plantsToFilter = myPlants;
         break;
-      case "recent-plants":
+      case "recent":
         plantsToFilter = recentPlants;
         break;
-      case "all":
       default:
         plantsToFilter = plants;
     }
@@ -357,13 +380,10 @@ const PlantLibrary = () => {
 
   const isTabLoading = () => {
     switch(activeTab) {
-      case "my-plants":
-        return isLoadingMyPlants;
-      case "recent-plants":
-        return isLoadingRecentPlants;
-      case "all":
-      default:
-        return isLoading;
+      case "my-plants":     return isLoadingMyPlants;
+      case "recent":        return isLoadingRecentPlants;
+      case "generic":
+      default:              return isLoading;
     }
   };
 
@@ -384,6 +404,83 @@ const PlantLibrary = () => {
                 Add Plant
               </Button>
             </DialogTrigger>
+            <DialogContent className="max-w-[95vw] sm:max-w-md md:max-w-lg overflow-y-auto max-h-[90vh]" style={{ resize: 'none' }}>
+              <form onSubmit={handleSubmit(onAddPlant)}>
+                <DialogHeader>
+                  <DialogTitle>Add New Plant</DialogTitle>
+                  <DialogDescription>Create a new plant for your garden library.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="add-name">Plant Name</Label>
+                    <Input id="add-name" {...register("name")} />
+                    {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-imageUrl">Image URL (optional)</Label>
+                    <Input id="add-imageUrl" placeholder="https://..." {...register("imageUrl")} />
+                    {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-description">Description</Label>
+                    <Textarea id="add-description" rows={3} {...register("description")} />
+                    {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="add-n">Nitrogen Impact</Label>
+                      <Input id="add-n" type="number" min={-10} max={10} step={1} {...register("nitrogenImpact", { valueAsNumber: true })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-p">Phosphorus Impact</Label>
+                      <Input id="add-p" type="number" min={-10} max={10} step={1} {...register("phosphorusImpact", { valueAsNumber: true })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-k">Potassium Impact</Label>
+                      <Input id="add-k" type="number" min={-10} max={10} step={1} {...register("potassiumImpact", { valueAsNumber: true })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="add-germ">Germination (days)</Label>
+                      <Input id="add-germ" type="number" min={1} {...register("germinationDays", { valueAsNumber: true })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-mat">Maturity (days)</Label>
+                      <Input id="add-mat" type="number" min={1} {...register("maturityDays", { valueAsNumber: true })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-harv">Harvest (days)</Label>
+                      <Input id="add-harv" type="number" min={1} {...register("harvestDays", { valueAsNumber: true })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="add-widthM">Plant Width (m)</Label>
+                      <Input id="add-widthM" type="number" min={0.1} max={10} step={0.1} {...register("widthM", { valueAsNumber: true })} />
+                      {errors.widthM && <p className="text-sm text-destructive">{errors.widthM.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-heightM">Plant Height (m)</Label>
+                      <Input id="add-heightM" type="number" min={0.1} max={10} step={0.1} {...register("heightM", { valueAsNumber: true })} />
+                      {errors.heightM && <p className="text-sm text-destructive">{errors.heightM.message}</p>}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-compat">Compatible Plants (comma-separated)</Label>
+                    <Input id="add-compat" placeholder="Basil, Marigold, Carrots" {...register("compatiblePlants")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-benefits">Companion Benefits</Label>
+                    <Textarea id="add-benefits" rows={2} {...register("companionBenefits")} />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" type="button" onClick={() => { setIsDialogOpen(false); reset(); }}>Cancel</Button>
+                  <Button type="submit" className="bg-garden-primary hover:bg-garden-primary/90">Add Plant</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
           </Dialog>
         </div>
 
@@ -404,9 +501,10 @@ const PlantLibrary = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
-            <TabsList className="grid grid-cols-2 w-full sm:w-auto sm:inline-flex">
-              <TabsTrigger value="all">All Plants</TabsTrigger>
-              <TabsTrigger value="recent-plants">Recent Plants</TabsTrigger>
+            <TabsList className="grid grid-cols-3 w-full sm:w-auto sm:inline-flex">
+              <TabsTrigger value="generic">Generic Plants</TabsTrigger>
+              <TabsTrigger value="my-plants">My Plants</TabsTrigger>
+              <TabsTrigger value="recent">Recent Plants</TabsTrigger>
             </TabsList>
 
             <div className="relative w-full sm:w-64">
@@ -420,22 +518,37 @@ const PlantLibrary = () => {
             </div>
           </div>
 
-          <TabsContent value="all" className="mt-0">
+          <TabsContent value="generic" className="mt-0">
             <Card className="overflow-hidden">
               <CardHeader className="bg-slate-50 py-3 px-4">
                 <CardTitle className="text-lg flex items-center">
                   <Leaf className="h-5 w-5 mr-2 text-garden-primary" />
-                  Available Plants
+                  Generic Plants
                 </CardTitle>
                 <CardDescription>
-                  Browse all plants in the common collection
+                  Standard plants available to all users
                 </CardDescription>
               </CardHeader>
               {renderPlantList(filteredPlants, isTabLoading(), handleEditPlant, handleCopyPlant, handleViewDetails, false)}
             </Card>
           </TabsContent>
 
-          <TabsContent value="recent-plants" className="mt-0">
+          <TabsContent value="my-plants" className="mt-0">
+            <Card className="overflow-hidden">
+              <CardHeader className="bg-slate-50 py-3 px-4">
+                <CardTitle className="text-lg flex items-center">
+                  <UsersIcon className="h-5 w-5 mr-2 text-garden-primary" />
+                  My Plants
+                </CardTitle>
+                <CardDescription>
+                  Plants you have created or copied
+                </CardDescription>
+              </CardHeader>
+              {renderPlantList(filteredPlants, isTabLoading(), handleEditPlant, handleCopyPlant, handleViewDetails, true)}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="recent" className="mt-0">
             <Card className="overflow-hidden">
               <CardHeader className="bg-slate-50 py-3 px-4">
                 <CardTitle className="text-lg flex items-center">
@@ -541,7 +654,7 @@ const PlantLibrary = () => {
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
                       <span className="font-medium">{plant.name}</span>
-                      {plant.isCommon && (
+                      {!plant.creatorId && (
                         <Badge variant="outline" className="text-xs border-garden-secondary text-garden-secondary">Common</Badge>
                       )}
                     </div>
@@ -582,7 +695,7 @@ const PlantLibrary = () => {
                       className="flex-1"
                     >
                       <Copy className="h-3 w-3 mr-2" />
-                      Edit
+                      Copy
                     </Button>
                   )}
                   <Button
@@ -636,7 +749,7 @@ const PlantLibrary = () => {
                       <div>
                         <div className="flex items-center space-x-2">
                           <span>{plant.name}</span>
-                          {plant.isCommon && (
+                          {!plant.creatorId && (
                             <Badge variant="outline" className="text-xs border-garden-secondary text-garden-secondary">Common</Badge>
                           )}
                         </div>
@@ -668,7 +781,7 @@ const PlantLibrary = () => {
                     <div className="flex flex-col gap-1">
                       {plant.compatiblePlants && plant.compatiblePlants.length > 0 ? (
                         <>
-                          <div className="text-xs font-medium">Plants: {plant.compatiblePlants.join(', ')}</div>
+                          <div className="text-xs font-medium">Plants: {plant.compatiblePlants.map(id => plantNameMap.get(id) ?? id).join(', ')}</div>
                           {plant.companionBenefits && (
                             <div className="text-xs text-muted-foreground">
                               <span className="italic">Benefits:</span> {plant.companionBenefits}
@@ -697,7 +810,7 @@ const PlantLibrary = () => {
                           onClick={() => onCopy(plant)}
                         >
                           <Copy className="h-3 w-3 mr-2" />
-                          Edit
+                          Copy
                         </Button>
                       )}
                       <Button
@@ -754,7 +867,7 @@ const PlantDetailsDialog = ({
               )}
             </div>
             <span>{plant.name}</span>
-            {plant.isCommon && (
+            {!plant.creatorId && (
               <Badge variant="outline" className="text-xs border-garden-secondary text-garden-secondary">Common</Badge>
             )}
           </DialogTitle>
@@ -1080,6 +1193,30 @@ const EditPlantDialog = ({
                 {errors.harvestDays && (
                   <p className="text-sm text-destructive">{errors.harvestDays.message}</p>
                 )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="widthM">Plant Width (m)</Label>
+                <Input
+                  id="widthM"
+                  type="number"
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                  {...register("widthM", { valueAsNumber: true })}
+                />
+                {errors.widthM && <p className="text-sm text-destructive">{errors.widthM.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="heightM">Plant Height (m)</Label>
+                <Input
+                  id="heightM"
+                  type="number"
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                  {...register("heightM", { valueAsNumber: true })}
+                />
+                {errors.heightM && <p className="text-sm text-destructive">{errors.heightM.message}</p>}
               </div>
             </div>
 

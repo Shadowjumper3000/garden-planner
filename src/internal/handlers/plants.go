@@ -11,12 +11,16 @@ import (
 )
 
 type plantOut struct {
-	ID          string   `json:"id"`
-	CreatorID   *int     `json:"creatorId"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	ImageURL    *string  `json:"imageUrl"`
-	IsEditable  bool     `json:"isEditable"`
+	ID          string  `json:"id"`
+	CreatorID   *int    `json:"creatorId"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	ImageURL    *string `json:"imageUrl"`
+	IsEditable  bool    `json:"isEditable"`
+	Size struct {
+		WidthM  float64 `json:"widthM"`
+		HeightM float64 `json:"heightM"`
+	} `json:"size"`
 	Nutrients struct {
 		NitrogenImpact   float64 `json:"nitrogenImpact"`
 		PhosphorusImpact float64 `json:"phosphorusImpact"`
@@ -39,6 +43,7 @@ func scanPlant(rows *sql.Rows, currentUserID int) (plantOut, error) {
 		&p.ID, &creatorID, &p.Name, &p.Description, &imageURL,
 		&p.Nutrients.NitrogenImpact, &p.Nutrients.PhosphorusImpact, &p.Nutrients.PotassiumImpact,
 		&p.GrowthCycle.Germination, &p.GrowthCycle.Maturity, &p.GrowthCycle.Harvest,
+		&p.Size.WidthM, &p.Size.HeightM,
 	); err != nil {
 		return p, err
 	}
@@ -81,7 +86,8 @@ func enrichPlants(db *sql.DB, plants []plantOut) []plantOut {
 
 const plantSelectCols = `id::text, creator_id, name, description, image_url,
 	nitrogen_impact, phosphorus_impact, potassium_impact,
-	germination_days, maturity_days, harvest_days`
+	germination_days, maturity_days, harvest_days,
+	width_m, height_m`
 
 // ListPlants returns all public plants.
 func ListPlants(db *sql.DB) http.HandlerFunc {
@@ -217,6 +223,8 @@ type createPlantReq struct {
 	GerminationDays  int      `json:"germinationDays"`
 	MaturityDays     int      `json:"maturityDays"`
 	HarvestDays      int      `json:"harvestDays"`
+	WidthM           float64  `json:"widthM"`
+	HeightM          float64  `json:"heightM"`
 	CompatiblePlants []string `json:"compatiblePlants"`
 	CompanionBenefits string  `json:"companionBenefits"`
 }
@@ -240,13 +248,19 @@ func CreatePlant(db *sql.DB) http.HandlerFunc {
 		if req.ImageURL != "" {
 			imgURL = &req.ImageURL
 		}
+		if req.WidthM <= 0 {
+			req.WidthM = 0.5
+		}
+		if req.HeightM <= 0 {
+			req.HeightM = 0.5
+		}
 
 		err := db.QueryRow(`
-			INSERT INTO plants (creator_id, name, description, image_url, nitrogen_impact, phosphorus_impact, potassium_impact, ph_impact, germination_days, maturity_days, harvest_days, is_public)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true) RETURNING id::text`,
+			INSERT INTO plants (creator_id, name, description, image_url, nitrogen_impact, phosphorus_impact, potassium_impact, ph_impact, germination_days, maturity_days, harvest_days, width_m, height_m, is_public)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true) RETURNING id::text`,
 			uid, req.Name, req.Description, imgURL,
 			req.NitrogenImpact, req.PhosphorusImpact, req.PotassiumImpact, req.PHImpact,
-			req.GerminationDays, req.MaturityDays, req.HarvestDays,
+			req.GerminationDays, req.MaturityDays, req.HarvestDays, req.WidthM, req.HeightM,
 		).Scan(&pid)
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, "could not create plant: "+err.Error())
@@ -302,14 +316,20 @@ func UpdatePlant(db *sql.DB) http.HandlerFunc {
 		if req.ImageURL != "" {
 			imgURL = &req.ImageURL
 		}
+		if req.WidthM <= 0 {
+			req.WidthM = 0.5
+		}
+		if req.HeightM <= 0 {
+			req.HeightM = 0.5
+		}
 		db.Exec(`
 			UPDATE plants SET name=$1, description=$2, image_url=$3,
 			nitrogen_impact=$4, phosphorus_impact=$5, potassium_impact=$6, ph_impact=$7,
-			germination_days=$8, maturity_days=$9, harvest_days=$10
-			WHERE id=$11`,
+			germination_days=$8, maturity_days=$9, harvest_days=$10, width_m=$11, height_m=$12
+			WHERE id=$13`,
 			req.Name, req.Description, imgURL,
 			req.NitrogenImpact, req.PhosphorusImpact, req.PotassiumImpact, req.PHImpact,
-			req.GerminationDays, req.MaturityDays, req.HarvestDays, id,
+			req.GerminationDays, req.MaturityDays, req.HarvestDays, req.WidthM, req.HeightM, id,
 		)
 
 		rows, _ := db.Query(`SELECT `+plantSelectCols+` FROM plants WHERE id=$1`, id)
@@ -357,8 +377,8 @@ func CopyPlant(db *sql.DB) http.HandlerFunc {
 
 		var pid string
 		err := db.QueryRow(`
-			INSERT INTO plants (creator_id, name, description, image_url, nitrogen_impact, phosphorus_impact, potassium_impact, ph_impact, germination_days, maturity_days, harvest_days, is_public)
-			SELECT $1, name || ' (copy)', description, image_url, nitrogen_impact, phosphorus_impact, potassium_impact, ph_impact, germination_days, maturity_days, harvest_days, is_public
+			INSERT INTO plants (creator_id, name, description, image_url, nitrogen_impact, phosphorus_impact, potassium_impact, ph_impact, germination_days, maturity_days, harvest_days, width_m, height_m, is_public)
+			SELECT $1, name || ' (copy)', description, image_url, nitrogen_impact, phosphorus_impact, potassium_impact, ph_impact, germination_days, maturity_days, harvest_days, width_m, height_m, is_public
 			FROM plants WHERE id=$2
 			RETURNING id::text`, uid, id,
 		).Scan(&pid)
