@@ -9,6 +9,11 @@ name: Frontend — Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy on the server (default: main)"
+        required: false
+        default: "main"
 
 permissions:
   contents: read
@@ -19,6 +24,7 @@ jobs:
     with:
       services: frontend
       recreate_volumes: false
+      branch: ${{ inputs.branch || 'main' }}
     secrets:
       INFRA_HETZNER_HOST: ${{ secrets.INFRA_HETZNER_HOST }}
       INFRA_HETZNER_USER: ${{ secrets.INFRA_HETZNER_USER }}

@@ -10,6 +10,10 @@ name: Backend — Deploy
 on:
   workflow_dispatch:
     inputs:
+      branch:
+        description: "Branch to deploy on the server (default: main)"
+        required: false
+        default: "main"
       recreate_volumes:
         description: "Drop data volumes before deploy (DESTRUCTIVE)"
         required: false
@@ -28,6 +32,7 @@ jobs:
     with:
       services: backend
       recreate_volumes: ${{ inputs.recreate_volumes == 'true' }}
+      branch: ${{ inputs.branch || 'main' }}
     secrets:
       INFRA_HETZNER_HOST: ${{ secrets.INFRA_HETZNER_HOST }}
       INFRA_HETZNER_USER: ${{ secrets.INFRA_HETZNER_USER }}
