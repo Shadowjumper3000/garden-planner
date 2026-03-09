@@ -24,402 +24,34 @@ import { Slider } from "@/components/ui/slider";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Garden, Plant, PlantingEvent, SoilCell, PlantPlacement, SoilHistoryEntry } from "@/types";
+import { Garden, Plant, PlantingEvent, SoilCell, PlantPlacement, SoilHistoryEntry, PlacedPlant } from "@/types";
 import { gardenAPI, plantAPI, soilHistoryAPI } from "@/api";
 import { useQuery } from "@tanstack/react-query";
 import { DndContext, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import SoilCalendarWheel from "@/components/soil/SoilCalendarWheel";
 import CompanionBadge from "@/components/garden/CompanionBadge";
+import SimpleCalendarComponent from "@/components/garden/SimpleCalendarComponent";
+import DraggablePlant from "@/components/garden/DraggablePlant";
+import PlacedPlantTile from "@/components/garden/PlacedPlantTile";
+import PlantPlaceholder from "@/components/garden/PlantPlaceholder";
+import SoilStats from "@/components/garden/SoilStats";
 import { CalendarDays, Edit, Leaf, Sprout, ChevronDown } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { getPlantColor } from "@/lib/plantUtils";
+import { SCALE } from "@/constants/garden";
 
 // DnD handled via @dnd-kit/core — DndContext wraps the whole layout
 
-// Create a simple calendar component
-const SimpleCalendarComponent = ({ events }: { events: PlantingEvent[] }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
-  
-  // Get events for current month
-  const filteredEvents = events.filter(event => {
-    const eventDate = new Date(event.start);
-    return eventDate.getMonth() === currentDate.getMonth() && 
-           eventDate.getFullYear() === currentDate.getFullYear();
-  });
-  
-  // Helper to get all days in current month
-  const getDaysInMonth = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    const days = [];
-    for (let i = 1; i <= daysInMonth; i++) {
-      const date = new Date(year, month, i);
-      days.push({
-        date,
-        dayNumber: i,
-        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
-        events: filteredEvents.filter(event => 
-          new Date(event.start).toDateString() === date.toDateString()
-        )
-      });
-    }
-    return days;
-  };
-  
-  // Get current month days
-  const days = getDaysInMonth();
-  
-  // Get first day of month to calculate offset
-  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-  const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 for Sunday, 1 for Monday, etc.
-  
-  // Change month
-  const nextMonth = () => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() + 1);
-    setCurrentDate(newDate);
-  };
-  
-  const prevMonth = () => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() - 1);
-    setCurrentDate(newDate);
-  };
-  
-  // Get to current month
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-  
-  // Get color and icon based on event type
-  const getEventStyle = (type: string) => {
-    switch(type) {
-      case 'planting':
-        return {
-          bgColor: 'bg-garden-primary/20',
-          textColor: 'text-garden-primary',
-          icon: <Sprout className="h-3 w-3 mr-1" />
-        };
-      case 'harvest':
-        return {
-          bgColor: 'bg-orange-300/30',
-          textColor: 'text-orange-700',
-          icon: <svg className="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25" /><path d="M8 16h.01" /><path d="M8 20h.01" /><path d="M12 18h.01" /><path d="M12 22h.01" /><path d="M16 16h.01" /><path d="M16 20h.01" /></svg>
-        };
-      default:
-        return {
-          bgColor: 'bg-gray-200',
-          textColor: 'text-gray-700',
-          icon: null
-        };
-    }
-  };
+// SimpleCalendarComponent moved to components/garden/SimpleCalendarComponent.tsx
 
-  // Format the date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-    });
-  };
-  
-  return (
-    <div className="calendar-container">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex space-x-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={prevMonth}
-          >
-            Previous
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={goToToday}
-          >
-            Today
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={nextMonth}
-          >
-            Next
-          </Button>
-        </div>
-        <h2 className="text-xl font-medium">
-          {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-        </h2>
-        <div className="flex space-x-2">
-          <Button
-            variant={viewMode === 'month' ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode('month')}
-          >
-            Month
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode('list')}
-          >
-            List
-          </Button>
-        </div>
-      </div>
-      
-      {viewMode === 'month' ? (
-        <div>
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center text-sm font-medium py-2">
-                {day}
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {/* Add empty cells for days before the first day of month */}
-            {Array.from({ length: firstDayOfWeek }).map((_, index) => (
-              <div key={`empty-${index}`} className="h-24 border rounded bg-gray-50 p-1"></div>
-            ))}
-            
-            {/* Render all days of the month */}
-            {days.map(({ date, dayNumber, events }) => (
-              <div 
-                key={dayNumber} 
-                className={`h-24 border rounded p-1 overflow-y-auto ${
-                  date.toDateString() === new Date().toDateString() ? 'bg-garden-primary/10' : ''
-                }`}
-              >
-                <div className="font-medium text-sm mb-1">{dayNumber}</div>
-                {events.map(event => {
-                  const style = getEventStyle(event.type);
-                  return (
-                    <div 
-                      key={event.id} 
-                      className={`text-xs p-1 mb-1 rounded truncate flex items-center ${style.bgColor} ${style.textColor}`}
-                      title={event.title}
-                    >
-                      {style.icon}
-                      <span className="truncate flex-1">{event.title}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filteredEvents.length > 0 ? (
-            filteredEvents
-              .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-              .map(event => {
-                const style = getEventStyle(event.type);
-                return (
-                  <div 
-                    key={event.id} 
-                    className={`p-3 rounded flex items-center space-x-3 ${style.bgColor}`}
-                  >
-                    <div 
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        event.type === 'planting' ? 'bg-garden-primary/20' : 'bg-orange-300/30'
-                      }`}
-                    >
-                      {style.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className={`font-medium truncate ${style.textColor}`}>{event.title}</div>
-                      <div className="text-sm text-muted-foreground flex items-center">
-                        <CalendarDays className="h-3 w-3 mr-1" />
-                        {formatDate(event.start)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No events for {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Legend */}
-      <div className="flex gap-4 justify-end mt-4 text-xs text-muted-foreground">
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-garden-primary/20 rounded mr-1"></div>
-          <span>Planting</span>
-        </div>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-orange-300/30 rounded mr-1"></div>
-          <span>Harvest</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Component for draggable plant item
-const DraggablePlant = ({ plant }: { plant: Plant }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: plant.id,
-    data: { plant },
-  });
-  const [imgError, setImgError] = useState(false);
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      // No transform here — DragOverlay handles the floating preview.
-      // Original stays in place, only dims slightly.
-      className={`plant-item cursor-grab select-none ${isDragging ? 'opacity-30' : ''}`}
-    >
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
-          {plant.imageUrl && !imgError ? (
-            <img
-              src={plant.imageUrl}
-              alt={plant.name}
-              className="w-full h-full object-cover"
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <PlantPlaceholder name={plant.name} />
-          )}
-        </div>
-        <div>
-          <h4 className="font-medium">{plant.name}</h4>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            <span className={`text-xs px-1.5 py-0.5 rounded ${plant.nutrients.nitrogenImpact > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              N: {plant.nutrients.nitrogenImpact > 0 ? '+' : ''}{plant.nutrients.nitrogenImpact}
-            </span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${plant.nutrients.phosphorusImpact > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              P: {plant.nutrients.phosphorusImpact > 0 ? '+' : ''}{plant.nutrients.phosphorusImpact}
-            </span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${plant.nutrients.potassiumImpact > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              K: {plant.nutrients.potassiumImpact > 0 ? '+' : ''}{plant.nutrients.potassiumImpact}
-            </span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">⌀ {plant.size.widthM}m</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Plant colour palette ──────────────────────────────────────────────────
-const PLANT_PALETTE = [
-  '#3A5A40','#4A7C52','#52796F','#588157','#7CB27E',
-  '#84A98C','#2D6A4F','#A3B18A','#BC6C25','#606C38',
-  '#DDA15E','#283618','#B5838D','#6D6875','#E07A5F',
-];
-
-const getPlantColor = (name: string): string => {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return PLANT_PALETTE[Math.abs(hash) % PLANT_PALETTE.length];
-};
-
-/** Coloured circle placeholder when no image is available */
-const PlantPlaceholder = ({ name, className = '' }: { name: string; className?: string }) => {
-  const color = getPlantColor(name);
-  const initial = name.trim().charAt(0).toUpperCase();
-  return (
-    <div
-      className={`w-full h-full flex items-center justify-center rounded-full ${className}`}
-      style={{ backgroundColor: color }}
-    >
-      <span className="text-white font-bold select-none" style={{ fontSize: '38%', lineHeight: 1 }}>
-        {initial}
-      </span>
-    </div>
-  );
-};
+// `DraggablePlant` moved to components/garden/DraggablePlant.tsx
 
 // ─── Garden canvas constants ───────────────────────────────────────────────
-const SCALE = 100; // px per metre
-const SNAP  = 0.25; // metres
+// SCALE (px/metre) and getPlantColor are imported from shared modules.
 
-interface PlacedPlant {
-  id: string;
-  plant: Plant;
-  x: number;
-  y: number;
-  widthM: number;
-  heightM: number;
-}
-
-const snapTo = (v: number) => Math.round(v / SNAP) * SNAP;
-
-// ─── Placed plant tile — circular top-down view ────────────────────────────
-const PlacedPlantTile = ({
-  pp,
-  isMoving,
-  onMouseDown,
-  onRemove,
-}: {
-  pp: PlacedPlant;
-  isMoving: boolean;
-  onMouseDown: (e: React.MouseEvent) => void;
-  onRemove: () => void;
-}) => {
-  const diam = Math.max(pp.widthM * SCALE, 18); // use widthM as diameter; minimum 18 px
-  const plantColor = getPlantColor(pp.plant.name);
-  const [imgError, setImgError] = useState(false);
-  return (
-    <div
-      className={`absolute group rounded-full overflow-hidden flex items-center justify-center select-none border-2 ${
-        isMoving
-          ? 'border-garden-primary ring-2 ring-garden-primary/50 cursor-grabbing z-20 shadow-lg'
-          : 'border-transparent hover:border-garden-secondary cursor-grab z-10'
-      }`}
-      style={{
-        left:   pp.x * SCALE,
-        top:    pp.y * SCALE,
-        width:  diam,
-        height: diam,
-        backgroundColor: `${plantColor}28`,
-      }}
-      onMouseDown={onMouseDown}
-      title={pp.plant.name}
-    >
-      {pp.plant.imageUrl && !imgError ? (
-        <img
-          src={pp.plant.imageUrl}
-          alt={pp.plant.name}
-          className="w-full h-full object-cover rounded-full"
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <PlantPlaceholder name={pp.plant.name} />
-      )}
-      {/* hover overlay */}
-      <div className="absolute inset-0 rounded-full bg-black/65 text-white opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[10px] pointer-events-none">
-        <p className="font-semibold text-center px-1 leading-tight">{pp.plant.name}</p>
-        <p className="opacity-70 mt-0.5">⌀ {pp.widthM}m</p>
-      </div>
-      {/* remove button */}
-      <button
-        className="absolute top-0 right-0 bg-red-600 text-white rounded-full w-4 h-4 text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-auto z-30 shadow"
-        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(); }}
-      >
-        ×
-      </button>
-    </div>
-  );
-};
+// `PlacedPlantTile` moved to components/garden/PlacedPlantTile.tsx
 
 // ─── Garden canvas ──────────────────────────────────────────────────────────
 const GardenCanvas = ({
@@ -453,82 +85,80 @@ const GardenCanvas = ({
     return `rgba(94,75,62,${(0.1 + avg * 0.4 + (cell.moisture / 100) * 0.2).toFixed(2)})`;
   };
 
-  const handleMouseDown = (e: React.MouseEvent, id: string, origX: number, origY: number) => {
+  const handlePointerDown = (e: React.PointerEvent, id: string, origX: number, origY: number) => {
     e.stopPropagation(); e.preventDefault();
     setMovingId(id);
     moveStart.current = { mouseX: e.clientX, mouseY: e.clientY, origX, origY };
-  };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!movingId || !moveStart.current) return;
-    const { mouseX, mouseY, origX, origY } = moveStart.current;
-    const pp = plantPlacements.get(movingId);
-    const dx = (e.clientX - mouseX) / SCALE;
-    const dy = (e.clientY - mouseY) / SCALE;
-    const newX = Math.max(0, Math.min(origX + dx, garden.widthM  - (pp?.widthM  || 0.5)));
-    const newY = Math.max(0, Math.min(origY + dy, garden.heightM - (pp?.heightM || 0.5)));
-    setDraggedPos({ id: movingId, x: newX, y: newY });
-  };
+    // capture pointer on the target if possible
+    try { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); } catch {}
 
-  const handleMouseUp = () => {
-    if (movingId && draggedPos?.id === movingId) {
-      onMovePlant(movingId, snapTo(draggedPos.x), snapTo(draggedPos.y));
-    }
-    setMovingId(null);
-    moveStart.current = null;
-    setDraggedPos(null);
+    const onMove = (me: PointerEvent) => {
+      if (!moveStart.current) return;
+      const { mouseX, mouseY, origX, origY } = moveStart.current!;
+      const pp = plantPlacements.get(id);
+      const dx = (me.clientX - mouseX) / SCALE;
+      const dy = (me.clientY - mouseY) / SCALE;
+      const newX = Math.max(0, Math.min(origX + dx, garden.widthM  - (pp?.widthM  || 0.5)));
+      const newY = Math.max(0, Math.min(origY + dy, garden.heightM - (pp?.heightM || 0.5)));
+      setDraggedPos({ id, x: newX, y: newY });
+    };
+
+    const onUp = (me: PointerEvent) => {
+      // finalize move
+      if (movingId === id && draggedPos?.id === id) {
+        onMovePlant(id, draggedPos.x, draggedPos.y);
+      }
+      setMovingId(null);
+      moveStart.current = null;
+      setDraggedPos(null);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   };
 
   return (
-    <div className="overflow-auto border rounded-md bg-amber-50/30">
-      <div
-        ref={(el) => { setNodeRef(el); canvasRef.current = el; }}
-        className={`relative ${isOver ? 'ring-2 ring-garden-primary' : ''}`}
-        style={{ width: canvasW, height: canvasH, minWidth: canvasW, minHeight: canvasH }}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      >
-        {/* Soil cells */}
+    <div className="overflow-auto border-2 border-garden-soil rounded-lg bg-garden-sand/30 shadow-inner p-1">
+      <div className="w-full flex justify-center items-start">
+        <div
+          ref={(el) => { setNodeRef(el); canvasRef.current = el; }}
+          className={`relative ${isOver ? 'ring-2 ring-garden-primary' : ''}`}
+          style={{
+            width: canvasW,
+            height: canvasH,
+            minWidth: canvasW,
+            minHeight: canvasH,
+            backgroundColor: '#efe7d6',
+            backgroundImage: 'radial-gradient(rgba(0,0,0,0.03) 1px, transparent 1px)',
+            backgroundSize: '12px 12px',
+            boxShadow: 'inset 0 0 20px rgba(0,0,0,0.04)'
+          }}
+          onPointerMove={() => { /* pointer handled via window listeners when dragging */ }}
+          onPointerUp={() => { /* pointer handled via window listeners when dragging */ }}
+        >
+        {/* Soil impact blobs (rendered as circles) */}
         {garden.soilData.cells.map((cell, i) => (
           <div
             key={i}
-            className="absolute"
+            className="absolute pointer-events-none"
             style={{
               left:  cell.x * SCALE,
               top:   cell.y * SCALE,
               width:  cellPx,
               height: cellPx,
-              backgroundColor: getNutrientColor(cell),
+              borderRadius: '9999px',
+              background: `radial-gradient(circle at 50% 50%, ${getNutrientColor(cell)} 0%, rgba(0,0,0,0) 75%)`,
+              mixBlendMode: 'multiply',
+              filter: 'blur(1px)'
             }}
-            title={`(${cell.x}m, ${cell.y}m) pH:${cell.ph.toFixed(1)} N:${cell.nitrogen}% M:${cell.moisture}%`}
+            title={`pH:${cell.ph.toFixed(1)} N:${cell.nitrogen}% M:${cell.moisture}%`}
           />
         ))}
 
-        {/* Grid lines */}
-        <svg
-          className="absolute inset-0 pointer-events-none"
-          width={canvasW}
-          height={canvasH}
-          style={{ opacity: 0.12 }}
-        >
-          {Array.from({ length: Math.floor(garden.widthM / SNAP) + 1 }, (_, i) => (
-            <line key={`v${i}`} x1={i*SNAP*SCALE} y1={0} x2={i*SNAP*SCALE} y2={canvasH} stroke="#555" strokeWidth="0.5" strokeDasharray="2 2" />
-          ))}
-          {Array.from({ length: Math.floor(garden.heightM / SNAP) + 1 }, (_, i) => (
-            <line key={`h${i}`} x1={0} y1={i*SNAP*SCALE} x2={canvasW} y2={i*SNAP*SCALE} stroke="#555" strokeWidth="0.5" strokeDasharray="2 2" />
-          ))}
-          {Array.from({ length: Math.floor(garden.widthM) + 1 }, (_, i) => (
-            <line key={`vm${i}`} x1={i*SCALE} y1={0} x2={i*SCALE} y2={canvasH} stroke="#555" strokeWidth="1" />
-          ))}
-          {Array.from({ length: Math.floor(garden.heightM) + 1 }, (_, i) => (
-            <line key={`hm${i}`} x1={0} y1={i*SCALE} x2={canvasW} y2={i*SCALE} stroke="#555" strokeWidth="1" />
-          ))}
-          {/* Metre labels */}
-          {Array.from({ length: Math.floor(garden.widthM) + 1 }, (_, i) => (
-            <text key={`lv${i}`} x={i*SCALE+3} y={10} fontSize="8" fill="#666">{i}m</text>
-          ))}
-        </svg>
+        {/* Grid disabled: free-coordinate placement used instead */}
 
         {/* Placed plants */}
         {Array.from(plantPlacements.entries()).map(([id, pp]) => {
@@ -539,36 +169,31 @@ const GardenCanvas = ({
               key={id}
               pp={{ ...pp, x, y }}
               isMoving={movingId === id}
-              onMouseDown={(e) => handleMouseDown(e, id, pp.x, pp.y)}
+              onPointerDown={(e) => handlePointerDown(e, id, pp.x, pp.y)}
               onRemove={() => onRemovePlant(id)}
             />
           );
         })}
       </div>
     </div>
+    </div>
   );
 };
 
 // ─── Legacy: Component for droppable soil cell (kept for dialog logic) ───────
-const DroppableSoilCell = ({ 
-  row, 
-  col, 
-  soilCell, 
-  onDrop, 
-  onRemovePlant,
-  plantPlacement = null,
-  plants,
-  placements,
-}: { 
-  row: number; 
-  col: number; 
-  soilCell: SoilCell; 
-  onDrop: (row: number, col: number, plant: Plant) => void; 
+interface DroppableSoilCellProps {
+  row: number;
+  col: number;
+  soilCell: SoilCell;
+  onDrop: (row: number, col: number, plant: Plant) => void;
   onRemovePlant: (row: number, col: number) => void;
   plantPlacement?: { plant: Plant } | null;
   plants: Plant[];
   placements: Map<string, { plant: Plant }>;
-}) => {
+}
+
+const DroppableSoilCell = (props: DroppableSoilCellProps) => {
+  const { row, col, soilCell, onDrop, onRemovePlant, plantPlacement = null, plants, placements } = props;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSoilInfoDialogOpen, setIsSoilInfoDialogOpen] = useState(false);
   const { isOver, setNodeRef: dropRef } = useDroppable({
@@ -977,77 +602,6 @@ const DroppableSoilCell = ({
   );
 };
 
-const SoilStats = ({ cells }: { cells: SoilCell[] }) => {
-  const calculateAverage = (key: keyof SoilCell) => {
-    if (cells.length === 0) return 0;
-    const sum = cells.reduce((acc, cell) => acc + (cell[key] as number), 0);
-    return Math.round((sum / cells.length) * 10) / 10;
-  };
-
-  const avgMoisture    = calculateAverage('moisture');
-  const avgNitrogen    = calculateAverage('nitrogen');
-  const avgPhosphorus  = calculateAverage('phosphorus');
-  const avgPotassium   = calculateAverage('potassium');
-  const avgPh          = calculateAverage('ph');
-  
-  return (
-    <div className="space-y-4">
-      <div>
-        <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium">Moisture</span>
-          <span className="text-sm text-muted-foreground">{avgMoisture}%</span>
-        </div>
-        <Progress value={avgMoisture} className="h-2" />
-      </div>
-      
-      <div>
-        <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium">Nitrogen (N)</span>
-          <span className="text-sm text-muted-foreground">{avgNitrogen}%</span>
-        </div>
-        <Progress value={avgNitrogen} className="h-2" />
-      </div>
-      
-      <div>
-        <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium">Phosphorus (P)</span>
-          <span className="text-sm text-muted-foreground">{avgPhosphorus}%</span>
-        </div>
-        <Progress value={avgPhosphorus} className="h-2" />
-      </div>
-      
-      <div>
-        <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium">Potassium (K)</span>
-          <span className="text-sm text-muted-foreground">{avgPotassium}%</span>
-        </div>
-        <Progress value={avgPotassium} className="h-2" />
-      </div>
-      
-      <div>
-        <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium">pH Level</span>
-          <span className="text-sm text-muted-foreground">{avgPh}</span>
-        </div>
-        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div 
-            className="h-full"
-            style={{ 
-              width: `${(avgPh / 14) * 100}%`,
-              background: "linear-gradient(to right, #f87171, #fbbf24, #34d399)" 
-            }}
-          ></div>
-        </div>
-        <div className="flex justify-between text-xs text-muted-foreground mt-1">
-          <span>Acidic</span>
-          <span>Neutral</span>
-          <span>Alkaline</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const GardenDashboard = () => {
   const { id: gardenId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -1082,13 +636,23 @@ const GardenDashboard = () => {
     const plant = (active.data?.current as { plant?: Plant })?.plant;
     if (!plant) return;
     const canvasRect = over.rect;
-    const me = ae as MouseEvent;
-    // Centre plant circle on the drop cursor position
+    // Prefer the active item's final bounding rect (more accurate), fallback to activatorEvent+delta
     const diam = plant.size.widthM;
-    const rawX = (me.clientX + delta.x - canvasRect.left) / SCALE - diam / 2;
-    const rawY = (me.clientY + delta.y - canvasRect.top)  / SCALE - diam / 2;
-    const x = Math.max(0, Math.min(snapTo(rawX), garden.widthM  - diam));
-    const y = Math.max(0, Math.min(snapTo(rawY), garden.heightM - diam));
+    let centerClientX = 0;
+    let centerClientY = 0;
+    if (active?.rect?.current?.translated && typeof active.rect.current.translated.left === 'number' && typeof active.rect.current.translated.width === 'number') {
+      centerClientX = active.rect.current.translated.left + (active.rect.current.translated.width / 2);
+      centerClientY = active.rect.current.translated.top  + (active.rect.current.translated.height / 2);
+    } else {
+      const me = ae as MouseEvent;
+      centerClientX = (me?.clientX || 0) + delta.x;
+      centerClientY = (me?.clientY || 0) + delta.y;
+    }
+
+    const rawX = (centerClientX - canvasRect.left) / SCALE - diam / 2;
+    const rawY = (centerClientY - canvasRect.top)  / SCALE - diam / 2;
+    const x = Math.max(0, Math.min(rawX, garden.widthM  - diam));
+    const y = Math.max(0, Math.min(rawY, garden.heightM - diam));
     handlePlantDrop(x, y, plant);
   };
 
@@ -1241,7 +805,7 @@ const GardenDashboard = () => {
         { id: `h-${Date.now()+1}`, title: `Harvest ${plant.name}`, start: harvestDate.toISOString().split('T')[0],   plantId: plant.id, gardenId: gardenId!, type: 'harvest',  color: '#f97316' },
       ]);
 
-      toast({ title: "Plant Added", description: `${plant.name} added at (${x}m, ${y}m).` });
+      toast({ title: "Plant Added", description: `${plant.name} added to your garden.` });
     } catch (error) {
       console.error("Error adding plant:", error);
       toast({ title: "Error", description: "Failed to add plant.", variant: "destructive" });
@@ -1424,7 +988,7 @@ const GardenDashboard = () => {
                       <SoilCalendarWheel
                         history={soilHistory}
                         onSelect={handleHistorySelect}
-                        selected={selectedHistoryEntry ?? undefined}
+                        selectedDate={selectedHistoryEntry?.recordedAt}
                       />
                     </div>
                   )}

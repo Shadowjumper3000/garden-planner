@@ -1,16 +1,27 @@
 # ─── Build stage ─────────────────────────────────────────────────────────────
-FROM oven/bun:1-alpine AS build
+FROM node:18-bullseye AS build
 
 WORKDIR /app
 
-COPY package.json bun.lockb ./
-RUN bun install
+# Ensure basic build tooling is available for any native deps during npm install
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential python3 make g++ ca-certificates curl \
+  libpng-dev libjpeg-dev libwebp-dev libgif-dev libx11-dev pkg-config git \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies using npm. Prefer package-lock if present, fallback to install.
+COPY package.json package-lock.json* ./
+# Use unsafe-perm to avoid permission issues during install as root
+RUN if [ -f package-lock.json ]; then npm ci --silent --unsafe-perm --legacy-peer-deps; else npm install --silent --unsafe-perm --legacy-peer-deps; fi
 
 COPY . .
 
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
-RUN bun run build
+# Ensure production env and allow larger heap for Node during build (reduce OOM failures)
+ENV NODE_ENV=production
+ENV NODE_OPTIONS=--max-old-space-size=4096
+RUN npm run build
 
 # ─── Production stage ─────────────────────────────────────────────────────────
 FROM nginx:1.26-alpine

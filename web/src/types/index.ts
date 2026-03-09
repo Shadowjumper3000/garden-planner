@@ -118,3 +118,13 @@ export interface Notification {
 
 export type NutrientType = 'nitrogen' | 'phosphorus' | 'potassium';
 
+/** A plant placed on the in-memory canvas (before persistence). */
+export interface PlacedPlant {
+  id: string;
+  plant: Plant;
+  x: number;      // left edge in metres
+  y: number;      // top edge in metres
+  widthM: number;
+  heightM: number;
+}
+
