@@ -1,18 +1,18 @@
 name: _Deploy (Reusable)
 
 # Reusable deployment workflow called by app.yml and web.yml.
-# Handles: SSH connection, repo clone/pull, .env write, docker compose up.
+# Builds images directly on the server — no registry required.
+# Handles: SSH, repo clone/pull, .env write, docker compose up --build.
 #
-# Required repository secrets:
+# Required secrets:
 #   INFRA_HETZNER_HOST, INFRA_HETZNER_USER, INFRA_HETZNER_SSH_KEY
 #   POSTGRES_PASSWORD, JWT_SECRET
-#   ADMIN_EMAIL, ADMIN_PASSWORD, GF_ADMIN_PASSWORD
+#   ADMIN_EMAIL, ADMIN_PASSWORD, GF_ADMIN_PASSWORD, DOMAIN
 #
 # Optional secrets:
-#   INFRA_HETZNER_PORT       (default 22)
-#   ADMIN_NAME               (default "Admin")
-#   INFRA_DEPLOY_GIT_KEY     (SSH deploy key — only needed for private forks;
-#                             the public repo works without it via HTTPS)
+#   INFRA_HETZNER_PORT        (default 22)
+#   ADMIN_NAME                (default "Admin")
+#   INFRA_DEPLOY_GIT_KEY      (SSH deploy key for private forks; public repo uses HTTPS)
 
 on:
   workflow_call:
@@ -21,13 +21,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "Space-separated compose service(s) to redeploy. Empty = all services."
-
-      image_tag:
-        required: false
-        type: string
-        default: "latest"
-        description: "Image tag written to IMAGE_TAG in server .env (controls which GHCR image compose pulls)."
+        description: "Space-separated compose service(s) to rebuild. Empty = all services."
 
       recreate_volumes:
         required: false
@@ -72,7 +66,7 @@ on:
         required: true
       DOMAIN:
         required: true
-        description: "Production domain (e.g. example.com). Used for GF_ROOT_URL and CORS_ALLOW_ORIGINS."
+        description: "Production hostname (e.g. example.com) — used for GF_ROOT_URL and CORS_ALLOW_ORIGINS."
 
 jobs:
   deploy:
@@ -84,40 +78,38 @@ jobs:
       - name: Deploy on remote host
         uses: appleboy/ssh-action@v1.2.0
         env:
-          SERVICES:           ${{ inputs.services }}
-          IMAGE_TAG:          ${{ inputs.image_tag }}
-          RECREATE_VOLUMES:   ${{ inputs.recreate_volumes }}
-          BRANCH:             ${{ inputs.branch || 'main' }}
-          APP_DIR:            ${{ inputs.app_dir }}
-          GH_REPO:            ${{ github.repository }}
+          SERVICES:             ${{ inputs.services }}
+          RECREATE_VOLUMES:     ${{ inputs.recreate_volumes }}
+          BRANCH:               ${{ inputs.branch || 'main' }}
+          APP_DIR:              ${{ inputs.app_dir }}
+          GH_REPO:              ${{ github.repository }}
           INFRA_DEPLOY_GIT_KEY: ${{ secrets.INFRA_DEPLOY_GIT_KEY }}
-          POSTGRES_PASSWORD:  ${{ secrets.POSTGRES_PASSWORD }}
-          JWT_SECRET:         ${{ secrets.JWT_SECRET }}
-          ADMIN_EMAIL:        ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD:     ${{ secrets.ADMIN_PASSWORD }}
-          ADMIN_NAME:         ${{ secrets.ADMIN_NAME }}
-          GF_ADMIN_PASSWORD:  ${{ secrets.GF_ADMIN_PASSWORD }}
-          DOMAIN:             ${{ secrets.DOMAIN }}
+          POSTGRES_PASSWORD:    ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET:           ${{ secrets.JWT_SECRET }}
+          ADMIN_EMAIL:          ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD:       ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_NAME:           ${{ secrets.ADMIN_NAME }}
+          GF_ADMIN_PASSWORD:    ${{ secrets.GF_ADMIN_PASSWORD }}
+          DOMAIN:               ${{ secrets.DOMAIN }}
         with:
           host:     ${{ secrets.INFRA_HETZNER_HOST }}
           username: ${{ secrets.INFRA_HETZNER_USER }}
           key:      ${{ secrets.INFRA_HETZNER_SSH_KEY }}
           port:     ${{ secrets.INFRA_HETZNER_PORT }}
-          envs:     SERVICES,IMAGE_TAG,RECREATE_VOLUMES,BRANCH,APP_DIR,GH_REPO,INFRA_DEPLOY_GIT_KEY,POSTGRES_PASSWORD,JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,GF_ADMIN_PASSWORD,DOMAIN
+          envs:     SERVICES,RECREATE_VOLUMES,BRANCH,APP_DIR,GH_REPO,INFRA_DEPLOY_GIT_KEY,POSTGRES_PASSWORD,JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,GF_ADMIN_PASSWORD,DOMAIN
           script: |
             set -euo pipefail
 
-            # Expand leading ~ manually (shell doesn't expand ~ inside variables)
+            # Expand leading ~ manually
             APP_DIR="${APP_DIR/#\~/$HOME}"
             mkdir -p "${APP_DIR}"
 
-            # ── 1. Set up git authentication ─────────────────────────────────
-            # If an SSH deploy key is provided, use it (needed for private forks).
-            # Otherwise fall back to anonymous HTTPS (works for the public repo).
+            # ── 1. Git authentication ────────────────────────────────────────
             if [ -n "${INFRA_DEPLOY_GIT_KEY:-}" ]; then
               TMP_KEY="/tmp/gp_deploy_key"
               mkdir -p "${HOME}/.ssh"
-              printf '%s\n' "${INFRA_DEPLOY_GIT_KEY}" > "${TMP_KEY}"
+              printf '%s
+' "${INFRA_DEPLOY_GIT_KEY}" > "${TMP_KEY}"
               chmod 600 "${TMP_KEY}"
               ssh-keyscan github.com >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
               export GIT_SSH_COMMAND="ssh -i ${TMP_KEY} -o IdentitiesOnly=yes -o UserKnownHostsFile=${HOME}/.ssh/known_hosts"
@@ -158,7 +150,6 @@ jobs:
             GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
             GF_ROOT_URL=https://${DOMAIN}/admin/dashboard
             CORS_ALLOW_ORIGINS=https://${DOMAIN}
-            IMAGE_TAG=${IMAGE_TAG}
             GITHUB_REPOSITORY=${GH_REPO}
             EOF
 
@@ -180,13 +171,11 @@ jobs:
             docker network inspect garden-planner-internal >/dev/null 2>&1 \
               || docker network create garden-planner-internal
 
-            # ── 6. Pull images and start services ────────────────────────────
+            # ── 6. Build images on the server and start services ─────────────
             if [ -n "${SERVICES}" ]; then
-              ${COMPOSE} pull ${SERVICES}
-              ${COMPOSE} up -d --no-deps --remove-orphans ${SERVICES}
+              ${COMPOSE} up -d --build --no-deps --remove-orphans ${SERVICES}
             else
-              ${COMPOSE} pull
-              ${COMPOSE} up -d --remove-orphans
+              ${COMPOSE} up -d --build --remove-orphans
             fi
 
             # ── 7. Health check ──────────────────────────────────────────────

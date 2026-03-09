@@ -34,7 +34,6 @@ services:
     build:
       context: ../src
       dockerfile: ../infra/app.Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY:-garden-planner/garden-planner}/backend:${IMAGE_TAG:-latest}
     container_name: garden-planner-backend
     restart: unless-stopped
     environment:
@@ -66,7 +65,6 @@ services:
     build:
       context: ../web
       dockerfile: ../infra/web-frontend.Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY:-garden-planner/garden-planner}/frontend:${IMAGE_TAG:-latest}
     container_name: garden-planner-frontend
     restart: unless-stopped
     depends_on:
