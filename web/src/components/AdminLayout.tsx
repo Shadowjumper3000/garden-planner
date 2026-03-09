@@ -8,7 +8,9 @@ import {
   ClipboardList, 
   Settings, 
   Home,
-  LogOut
+  LogOut,
+  LineChart,
+  ExternalLink
 } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 
@@ -29,7 +31,7 @@ const AdminLayout = () => {
   }
 
   const navigationItems = [
-    { name: 'Dashboard', href: '/admin', icon: <BarChart3 className="h-5 w-5" /> },
+    { name: 'Overview', href: '/admin', icon: <BarChart3 className="h-5 w-5" /> },
     { name: 'Users', href: '/admin/users', icon: <Users className="h-5 w-5" /> },
     { name: 'User Activities', href: '/admin/activities', icon: <ClipboardList className="h-5 w-5" /> },
     { name: 'Settings', href: '/admin/settings', icon: <Settings className="h-5 w-5" /> },
@@ -59,6 +61,20 @@ const AdminLayout = () => {
               </li>
             ))}
           </ul>
+
+          {/* Grafana dashboard — proxied at /admin/dashboard/ by nginx */}
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <a
+              href="/admin/dashboard/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center px-4 py-3 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+            >
+              <LineChart className="h-5 w-5" />
+              <span className="ml-3">Grafana Dashboard</span>
+              <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-60" />
+            </a>
+          </div>
         </nav>
         
         <div className="p-4 border-t border-slate-700">

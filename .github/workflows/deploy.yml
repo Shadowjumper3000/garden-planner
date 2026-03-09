@@ -1,0 +1,189 @@
+name: _Deploy (Reusable)
+
+# Reusable deployment workflow called by app.yml and web.yml.
+# Handles: SSH connection, repo clone/pull, .env write, docker compose up.
+#
+# Required repository secrets:
+#   INFRA_HETZNER_HOST, INFRA_HETZNER_USER, INFRA_HETZNER_SSH_KEY
+#   POSTGRES_PASSWORD, JWT_SECRET
+#   ADMIN_EMAIL, ADMIN_PASSWORD, GF_ADMIN_PASSWORD
+#
+# Optional secrets:
+#   INFRA_HETZNER_PORT       (default 22)
+#   ADMIN_NAME               (default "Admin")
+#   INFRA_DEPLOY_GIT_KEY     (SSH deploy key — only needed for private forks;
+#                             the public repo works without it via HTTPS)
+
+on:
+  workflow_call:
+    inputs:
+      services:
+        required: false
+        type: string
+        default: ""
+        description: "Space-separated compose service(s) to redeploy. Empty = all services."
+
+      image_tag:
+        required: false
+        type: string
+        default: "latest"
+        description: "Image tag written to IMAGE_TAG in server .env (controls which GHCR image compose pulls)."
+
+      recreate_volumes:
+        required: false
+        type: boolean
+        default: false
+        description: "Drop and recreate all named data volumes before starting. WARNING: destroys all persistent data."
+
+      branch:
+        required: false
+        type: string
+        default: ""
+        description: "Branch to deploy. Defaults to main."
+
+      app_dir:
+        required: false
+        type: string
+        default: "~/garden-planner"
+        description: "Path on remote host where the repo lives."
+
+    secrets:
+      INFRA_HETZNER_HOST:
+        required: true
+      INFRA_HETZNER_USER:
+        required: true
+      INFRA_HETZNER_SSH_KEY:
+        required: true
+      INFRA_HETZNER_PORT:
+        required: false
+      INFRA_DEPLOY_GIT_KEY:
+        required: false
+      POSTGRES_PASSWORD:
+        required: true
+      JWT_SECRET:
+        required: true
+      ADMIN_EMAIL:
+        required: true
+      ADMIN_PASSWORD:
+        required: true
+      ADMIN_NAME:
+        required: false
+      GF_ADMIN_PASSWORD:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy via SSH
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy on remote host
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          SERVICES:           ${{ inputs.services }}
+          IMAGE_TAG:          ${{ inputs.image_tag }}
+          RECREATE_VOLUMES:   ${{ inputs.recreate_volumes }}
+          BRANCH:             ${{ inputs.branch || 'main' }}
+          APP_DIR:            ${{ inputs.app_dir }}
+          GH_REPO:            ${{ github.repository }}
+          INFRA_DEPLOY_GIT_KEY: ${{ secrets.INFRA_DEPLOY_GIT_KEY }}
+          POSTGRES_PASSWORD:  ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET:         ${{ secrets.JWT_SECRET }}
+          ADMIN_EMAIL:        ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD:     ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_NAME:         ${{ secrets.ADMIN_NAME }}
+          GF_ADMIN_PASSWORD:  ${{ secrets.GF_ADMIN_PASSWORD }}
+        with:
+          host:     ${{ secrets.INFRA_HETZNER_HOST }}
+          username: ${{ secrets.INFRA_HETZNER_USER }}
+          key:      ${{ secrets.INFRA_HETZNER_SSH_KEY }}
+          port:     ${{ secrets.INFRA_HETZNER_PORT }}
+          envs:     SERVICES,IMAGE_TAG,RECREATE_VOLUMES,BRANCH,APP_DIR,GH_REPO,INFRA_DEPLOY_GIT_KEY,POSTGRES_PASSWORD,JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,GF_ADMIN_PASSWORD
+          script: |
+            set -euo pipefail
+
+            # Expand leading ~ manually (shell doesn't expand ~ inside variables)
+            APP_DIR="${APP_DIR/#\~/$HOME}"
+            mkdir -p "${APP_DIR}"
+
+            # ── 1. Set up git authentication ─────────────────────────────────
+            # If an SSH deploy key is provided, use it (needed for private forks).
+            # Otherwise fall back to anonymous HTTPS (works for the public repo).
+            if [ -n "${INFRA_DEPLOY_GIT_KEY:-}" ]; then
+              TMP_KEY="/tmp/gp_deploy_key"
+              mkdir -p "${HOME}/.ssh"
+              printf '%s\n' "${INFRA_DEPLOY_GIT_KEY}" > "${TMP_KEY}"
+              chmod 600 "${TMP_KEY}"
+              ssh-keyscan github.com >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
+              export GIT_SSH_COMMAND="ssh -i ${TMP_KEY} -o IdentitiesOnly=yes -o UserKnownHostsFile=${HOME}/.ssh/known_hosts"
+              CLONE_URL=$(echo "https://github.com/${GH_REPO}.git" | sed 's|https://github.com/|git@github.com:|')
+            else
+              CLONE_URL="https://github.com/${GH_REPO}.git"
+            fi
+
+            # ── 2. Clone repo if missing, otherwise pull latest ──────────────
+            if [ -d "${APP_DIR}/.git" ]; then
+              echo ">>> Pulling latest (branch: ${BRANCH})..."
+              git -C "${APP_DIR}" remote set-url origin "${CLONE_URL}"
+              git -C "${APP_DIR}" fetch --prune
+              git -C "${APP_DIR}" reset --hard "origin/${BRANCH}"
+            else
+              echo ">>> Cloning repository (branch: ${BRANCH})..."
+              git clone --branch "${BRANCH}" "${CLONE_URL}" "${APP_DIR}"
+            fi
+
+            [ -n "${INFRA_DEPLOY_GIT_KEY:-}" ] && rm -f /tmp/gp_deploy_key
+
+            cd "${APP_DIR}"
+
+            # ── 3. Write .env from secrets ───────────────────────────────────
+            cat > .env <<EOF
+            POSTGRES_USER=garden
+            POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            POSTGRES_DB=garden
+            JWT_SECRET=${JWT_SECRET}
+            ADMIN_EMAIL=${ADMIN_EMAIL}
+            ADMIN_PASSWORD=${ADMIN_PASSWORD}
+            ADMIN_NAME=${ADMIN_NAME:-Admin}
+            GF_ADMIN_USER=admin
+            GF_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD}
+            GF_DATABASE_HOST=db:5432
+            GF_DATABASE_NAME=garden
+            GF_DATABASE_USER=garden
+            GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+            IMAGE_TAG=${IMAGE_TAG}
+            GITHUB_REPOSITORY=${GH_REPO}
+            EOF
+
+            # ── 4. Optionally drop data volumes ──────────────────────────────
+            COMPOSE="docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.prod.yml"
+
+            if [ "${RECREATE_VOLUMES}" = "true" ]; then
+              echo ">>> WARNING: RECREATE_VOLUMES=true — dropping data volumes..."
+              ${COMPOSE} down --remove-orphans 2>/dev/null || true
+              for vol in garden-planner-db-data garden-planner-grafana-data; do
+                if docker volume inspect "${vol}" >/dev/null 2>&1; then
+                  docker volume rm "${vol}"
+                  echo ">>> Dropped volume: ${vol}"
+                fi
+              done
+            fi
+
+            # ── 5. Ensure shared Docker network exists ───────────────────────
+            docker network inspect garden-planner-internal >/dev/null 2>&1 \
+              || docker network create garden-planner-internal
+
+            # ── 6. Pull images and start services ────────────────────────────
+            if [ -n "${SERVICES}" ]; then
+              ${COMPOSE} pull ${SERVICES}
+              ${COMPOSE} up -d --no-deps --remove-orphans ${SERVICES}
+            else
+              ${COMPOSE} pull
+              ${COMPOSE} up -d --remove-orphans
+            fi
+
+            # ── 7. Health check ──────────────────────────────────────────────
+            sleep 5
+            docker ps --filter "name=garden-planner" --format "{{.Names}}\t{{.Status}}"
+            echo ">>> Deployment complete."

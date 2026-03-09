@@ -1,28 +1,71 @@
-version: '3.9'
-extends:
-  file: docker-compose.base.yml
+# ─── Production overlay ─────────────────────────────────────────────────────────
+# Usage:
+#   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.prod.yml up -d --build
+# Rolling backend update only:
+#   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.prod.yml \
+#     up -d --build --no-deps --wait backend
+
 services:
+  db:
+    # No host port binding in prod — only reachable within Docker networks
+    networks:
+      - internal
+      - proxy
+
   backend:
-    <<: *backend
-    environment:
-      - ENV=production
     expose:
       - "8080"
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
     networks:
+      - internal
       - proxy
+
   frontend:
-    <<: *frontend
-    environment:
-      - ENV=production
     expose:
       - "80"
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 5s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
     networks:
+      - internal
       - proxy
-  db:
-    <<: *db
+
+  grafana:
+    # Grafana is served at /admin/dashboard/ via the frontend nginx proxy.
+    # Set GF_ROOT_URL secret to https://yourdomain.com/admin/dashboard
+    expose:
+      - "3000"
     environment:
-      - POSTGRES_DB=garden
-      - POSTGRES_USER=garden
-      - POSTGRES_PASSWORD=garden
+      GF_SERVER_ROOT_URL: ${GF_ROOT_URL:-https://yourdomain.com/admin/dashboard}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     networks:
+      - internal
       - proxy
+
+networks:
+  internal:
+    driver: bridge
+    name: garden-planner-internal
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-traefik_proxy}

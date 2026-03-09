@@ -30,13 +30,23 @@ export interface SoilCell {
   ph: number; // 0-14 scale
 }
 
+export interface SoilHistoryEntry {
+  recordedAt: string;
+  cells: SoilCell[][];
+  /** Pre-computed average used by the scroll wheel gauge */
+  avgMoisture?: number;
+  avgNitrogen?: number;
+  avgPhosphorus?: number;
+  avgPotassium?: number;
+}
+
 export interface Plant {
   id: string;
   name: string;
   imageUrl?: string;
   description: string;
-  creatorId?: string; // Track who created this plant
-  isEditable?: boolean; // Whether the current user can edit this plant
+  creatorId?: string;
+  isEditable?: boolean;
   nutrients: {
     nitrogenImpact: number; // -10 to 10 scale, negative means consumption
     phosphorusImpact: number;
@@ -49,6 +59,15 @@ export interface Plant {
     maturity: number; // days
     harvest: number; // days
   };
+}
+
+export interface PlantRelationship {
+  id: string;
+  plantAId: string;
+  plantBId: string;
+  /** 'beneficial' | 'neutral' | 'harmful' */
+  relationshipType: string;
+  benefitDescription: string;
 }
 
 export interface User {
@@ -77,4 +96,17 @@ export interface PlantingEvent {
   color?: string;
 }
 
+export interface Notification {
+  id: string;
+  type: 'watering' | 'harvest' | 'maintenance' | 'system';
+  title: string;
+  body: string;
+  gardenId?: string;
+  plantId?: string;
+  scheduledAt?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
 export type NutrientType = 'nitrogen' | 'phosphorus' | 'potassium';
+

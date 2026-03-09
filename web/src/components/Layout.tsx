@@ -1,9 +1,10 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Home, Leaf, LogOut, User, LayoutDashboard, Menu, X, Sprout } from "lucide-react";
+import { Home, Leaf, LogOut, User, LayoutDashboard, Menu, X, Sprout, Bell } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
+import NotificationBell from "./notifications/NotificationBell";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -47,6 +48,7 @@ const Layout = ({ children }: LayoutProps) => {
                 <span className="hidden md:inline-block text-sm text-garden-light">
                   Welcome, {user?.name}
                 </span>
+                <NotificationBell />
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -109,6 +111,14 @@ const Layout = ({ children }: LayoutProps) => {
                       >
                         <Sprout className="h-5 w-5" />
                         <span>Plant Library</span>
+                      </Link>
+                      <Link 
+                        to="/notifications" 
+                        className="flex items-center gap-2 px-2 py-3 hover:bg-white/10 rounded-md"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <Bell className="h-5 w-5" />
+                        <span>Notifications</span>
                       </Link>
                       {user?.role === 'admin' && (
                         <Link 

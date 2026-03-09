@@ -24,40 +24,19 @@ import { Slider } from "@/components/ui/slider";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Garden, Plant, PlantingEvent, SoilCell, PlantPlacement } from "@/types";
-import { gardenAPI, plantAPI } from "@/api";
+import { Garden, Plant, PlantingEvent, SoilCell, PlantPlacement, SoilHistoryEntry } from "@/types";
+import { gardenAPI, plantAPI, soilHistoryAPI } from "@/api";
+import { useQuery } from "@tanstack/react-query";
+import { DndContext, DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import SoilCalendarWheel from "@/components/soil/SoilCalendarWheel";
+import CompanionBadge from "@/components/garden/CompanionBadge";
 import { CalendarDays, Edit, Leaf, Sprout, ChevronDown } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-// Import DnD components conditionally to prevent build failures
-let DndProvider: any;
-let useDrag: any;
-let useDrop: any;
-let HTML5Backend: any;
-
-try {
-  // Dynamic imports for DnD using ESM import syntax
-  Promise.all([
-    import("react-dnd"),
-    import("react-dnd-html5-backend")
-  ]).then(([dndImport, backendImport]) => {
-    DndProvider = dndImport.DndProvider;
-    useDrag = dndImport.useDrag;
-    useDrop = dndImport.useDrop;
-    HTML5Backend = backendImport.HTML5Backend;
-  }).catch(error => {
-    console.warn("Failed to load react-dnd dependencies:", error);
-  });
-} catch (error) {
-  console.warn("Failed to load react-dnd dependencies:", error);
-  // Provide fallback implementations
-  DndProvider = ({ children }: { children: React.ReactNode }) => <>{children}</>;
-  useDrag = () => [{ isDragging: false }, () => null];
-  useDrop = () => [{ isOver: false }, () => null];
-  HTML5Backend = {};
-}
+// DnD handled via @dnd-kit/core — DndContext wraps the whole layout
 
 // Create a simple calendar component
 const SimpleCalendarComponent = ({ events }: { events: PlantingEvent[] }) => {
@@ -291,21 +270,23 @@ const SimpleCalendarComponent = ({ events }: { events: PlantingEvent[] }) => {
   );
 };
 
-const ITEM_TYPE = "PLANT";
-
 // Component for draggable plant item
 const DraggablePlant = ({ plant }: { plant: Plant }) => {
-  const [{ isDragging }, drag] = useDrag({
-    type: ITEM_TYPE,
-    item: { plant },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: plant.id,
+    data: { plant },
   });
+
+  const dragStyle = transform
+    ? { transform: CSS.Transform.toString(transform) }
+    : undefined;
 
   return (
     <div
-      ref={drag}
+      ref={setNodeRef}
+      style={dragStyle}
+      {...listeners}
+      {...attributes}
       className={`plant-item cursor-grab ${isDragging ? "opacity-50" : ""}`}
     >
       <div className="flex items-center gap-3">
@@ -352,7 +333,8 @@ const DroppableSoilCell = ({
   onDrop, 
   onRemovePlant,
   plantPlacement = null,
-  plants
+  plants,
+  placements,
 }: { 
   row: number; 
   col: number; 
@@ -361,17 +343,12 @@ const DroppableSoilCell = ({
   onRemovePlant: (row: number, col: number) => void;
   plantPlacement?: { plant: Plant } | null;
   plants: Plant[];
+  placements: Map<string, { plant: Plant }>;
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSoilInfoDialogOpen, setIsSoilInfoDialogOpen] = useState(false);
-  const [{ isOver }, drop] = useDrop({
-    accept: ITEM_TYPE,
-    drop: (item: { plant: Plant }) => {
-      onDrop(row, col, item.plant);
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-    }),
+  const { isOver, setNodeRef: dropRef } = useDroppable({
+    id: `${row}-${col}`,
   });
 
   // Calculate color based on soil health
@@ -450,7 +427,7 @@ const DroppableSoilCell = ({
   return (
     <>
       <div
-        ref={drop}
+        ref={dropRef}
         className={`soil-cell relative ${isOver ? "ring-2 ring-garden-primary" : ""} ${!plantPlacement && isOver ? "bg-garden-primary/10" : ""}`}
         style={{ backgroundColor: getNutrientColor() }}
         onClick={handleCellClick}
@@ -460,6 +437,9 @@ const DroppableSoilCell = ({
           className="absolute top-0 left-0 right-0 bottom-0 opacity-30"
           style={{ backgroundColor: getSoilHealthColor() }}
         ></div>
+
+        {/* Companion plant badges on cell edges */}
+        <CompanionBadge row={row} col={col} placements={placements} />
 
         {plantPlacement && (
           <div className="w-full h-full flex items-center justify-center group">
@@ -865,6 +845,28 @@ const GardenDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<SoilHistoryEntry | null>(null);
+
+  // Soil history for the calendar wheel
+  const { data: soilHistory = [] } = useQuery<SoilHistoryEntry[]>({
+    queryKey: ["soilHistory", gardenId],
+    queryFn: () => soilHistoryAPI.getHistory(gardenId!),
+    enabled: !!gardenId && isAuthenticated,
+  });
+
+  const handleHistorySelect = (entry: SoilHistoryEntry) => {
+    setSelectedHistoryEntry(entry);
+  };
+
+  // @dnd-kit drag end handler — called when a plant from the sidebar is dropped on a cell
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+    const plant = (active.data?.current as { plant?: Plant })?.plant;
+    if (!plant) return;
+    const [row, col] = (over.id as string).split("-").map(Number);
+    handlePlantDrop(row, col, plant);
+  };
 
   const editGardenSchema = z.object({
     name: z.string().min(1, "Garden name is required"),
@@ -1198,6 +1200,7 @@ const GardenDashboard = () => {
           </Button>
         </div>
         
+        <DndContext onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <Tabs defaultValue="grid">
@@ -1218,44 +1221,43 @@ const GardenDashboard = () => {
                     <CardTitle className="text-lg font-serif">Garden Layout</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <DndProvider backend={HTML5Backend}>
-                      <div 
-                        className="soil-grid"
-                        style={{ 
-                          gridTemplateRows: `repeat(${garden.rows}, 1fr)`,
-                          gridTemplateColumns: `repeat(${garden.columns}, 1fr)`
-                        }}
-                      >
-                        {Array.from({ length: garden.rows }).map((_, rowIndex) => (
-                          Array.from({ length: garden.columns }).map((_, colIndex) => {
-                            const cellKey = `${rowIndex}-${colIndex}`;
-                            const placement = plantPlacements.get(cellKey);
-                            
-                            return (
-                              <DroppableSoilCell 
-                                key={cellKey}
-                                row={rowIndex}
-                                col={colIndex}
-                                soilCell={garden.soilData.cells[rowIndex]?.[colIndex] || {
-                                  moisture: 50,
-                                  nitrogen: 50,
-                                  phosphorus: 50,
-                                  potassium: 50,
-                                  ph: 7,
-                                }}
-                                onDrop={handlePlantDrop}
-                                onRemovePlant={handleRemovePlant}
-                                plantPlacement={placement}
-                                plants={plants}
-                              />
-                            );
-                          })
-                        ))}
-                      </div>
-                      <div className="mt-4 text-sm text-muted-foreground text-center">
-                        Click on a cell to add a plant.
-                      </div>
-                    </DndProvider>
+                    <div 
+                      className="soil-grid"
+                      style={{ 
+                        gridTemplateRows: `repeat(${garden.rows}, 1fr)`,
+                        gridTemplateColumns: `repeat(${garden.columns}, 1fr)`
+                      }}
+                    >
+                      {Array.from({ length: garden.rows }).map((_, rowIndex) => (
+                        Array.from({ length: garden.columns }).map((_, colIndex) => {
+                          const cellKey = `${rowIndex}-${colIndex}`;
+                          const placement = plantPlacements.get(cellKey);
+                          
+                          return (
+                            <DroppableSoilCell 
+                              key={cellKey}
+                              row={rowIndex}
+                              col={colIndex}
+                              soilCell={garden.soilData.cells[rowIndex]?.[colIndex] || {
+                                moisture: 50,
+                                nitrogen: 50,
+                                phosphorus: 50,
+                                potassium: 50,
+                                ph: 7,
+                              }}
+                              onDrop={handlePlantDrop}
+                              onRemovePlant={handleRemovePlant}
+                              plantPlacement={placement}
+                              plants={plants}
+                              placements={plantPlacements}
+                            />
+                          );
+                        })
+                      ))}
+                    </div>
+                    <div className="mt-4 text-sm text-muted-foreground text-center">
+                      Drag a plant from the sidebar or click a cell to plant.
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1281,6 +1283,16 @@ const GardenDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <SoilStats soilData={garden.soilData.cells} />
+                  {soilHistory.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Soil History</p>
+                      <SoilCalendarWheel
+                        history={soilHistory}
+                        onSelect={handleHistorySelect}
+                        selected={selectedHistoryEntry ?? undefined}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               
@@ -1289,18 +1301,17 @@ const GardenDashboard = () => {
                   <CardTitle className="text-lg font-serif">Plant Library</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <DndProvider backend={HTML5Backend}>
-                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                      {plants.map(plant => (
-                        <DraggablePlant key={plant.id} plant={plant} />
-                      ))}
-                    </div>
-                  </DndProvider>
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                    {plants.map(plant => (
+                      <DraggablePlant key={plant.id} plant={plant} />
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </div>
         </div>
+        </DndContext>
       </div>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

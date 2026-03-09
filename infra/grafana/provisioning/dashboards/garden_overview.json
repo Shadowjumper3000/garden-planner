@@ -1,0 +1,103 @@
+{
+  "title": "Garden Planner — Overview",
+  "uid": "garden_overview",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total Users",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT COUNT(*) AS value FROM users",
+        "format": "table"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total Gardens",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT COUNT(*) AS value FROM gardens",
+        "format": "table"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Plants in Library",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT COUNT(*) AS value FROM plants",
+        "format": "table"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Pending Notifications",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT COUNT(*) AS value FROM notifications WHERE status = 'scheduled'",
+        "format": "table"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "New Registrations (last 30 days)",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT date_trunc('day', created_at) AS time, COUNT(*) AS registrations FROM users WHERE created_at > now() - INTERVAL '30 days' GROUP BY 1 ORDER BY 1",
+        "format": "time_series"
+      }]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Gardens Created (last 30 days)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT date_trunc('day', created_at) AS time, COUNT(*) AS gardens FROM gardens WHERE created_at > now() - INTERVAL '30 days' GROUP BY 1 ORDER BY 1",
+        "format": "time_series"
+      }]
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "Users by Role",
+      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 8 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT role AS metric, COUNT(*) AS value FROM users GROUP BY role",
+        "format": "table"
+      }]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Recent Activity (last 50)",
+      "gridPos": { "x": 8, "y": 12, "w": 16, "h": 8 },
+      "targets": [{
+        "datasource": { "uid": "garden_postgres" },
+        "rawSql": "SELECT al.created_at AS \"Time\", u.email AS \"User\", al.action AS \"Action\", al.entity_type AS \"Entity\", al.details AS \"Details\" FROM activity_logs al LEFT JOIN users u ON u.id = al.user_id ORDER BY al.created_at DESC LIMIT 50",
+        "format": "table"
+      }],
+      "options": { "sortBy": [{ "displayName": "Time", "desc": true }] }
+    }
+  ]
+}

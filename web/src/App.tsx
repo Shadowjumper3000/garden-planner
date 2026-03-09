@@ -10,6 +10,7 @@ import Register from "./pages/Register";
 import GardenDashboard from "./pages/GardenDashboard";
 import PlantLibrary from "./pages/PlantLibrary";
 import NotFound from "./pages/NotFound";
+import Notifications from "./pages/Notifications";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // Import Admin components
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/register" element={<Register />} />
               <Route path="/gardens/:id" element={<GardenDashboard />} />
               <Route path="/plants" element={<PlantLibrary />} />
+              <Route path="/notifications" element={<Notifications />} />
               
               {/* Admin Routes */}
               <Route path="/admin" element={<AdminLayout />}>

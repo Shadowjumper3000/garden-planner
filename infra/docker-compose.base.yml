@@ -1,47 +1,120 @@
-version: '3.9'
+# ─── Base definitions ─────────────────────────────────────────────────────────
+# Merge with dev or prod overlay:
+#   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.dev.yml up
+#   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.prod.yml up
 
-x-backend: &backend
-  build:
-    context: ../src/backend
-    dockerfile: ../infra/app.Dockerfile
-  container_name: garden_backend
-  volumes:
-    - backend_data:/app/data
-  environment:
-    - ENV=production
-  networks:
-    - proxy
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
-x-frontend: &frontend
-  build:
-    context: ../web/frontend
-    dockerfile: ../infra/web-frontend.Dockerfile
-  container_name: garden_frontend
-  volumes:
-    - frontend_data:/app/node_modules
-  environment:
-    - ENV=production
-  networks:
-    - proxy
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: garden-planner-db
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ../db/seed:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-garden}
+      POSTGRES_USER: ${POSTGRES_USER:-garden}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-garden} -d ${POSTGRES_DB:-garden}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    <<: *logging
 
-x-db: &db
-  image: postgres:16
-  container_name: garden_db
-  volumes:
-    - db_data:/var/lib/postgresql/data
-    - ../db/seed:/docker-entrypoint-initdb.d
-  environment:
-    - POSTGRES_DB=garden
-    - POSTGRES_USER=garden
-    - POSTGRES_PASSWORD=garden
-  networks:
-    - proxy
+  backend:
+    build:
+      context: ../src
+      dockerfile: ../infra/app.Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY:-garden-planner/garden-planner}/backend:${IMAGE_TAG:-latest}
+    container_name: garden-planner-backend
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-garden}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_NAME: ${POSTGRES_DB:-garden}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173}
+      CORS_ALLOW_CREDENTIALS: "true"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Admin}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    <<: *logging
+
+  frontend:
+    build:
+      context: ../web
+      dockerfile: ../infra/web-frontend.Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY:-garden-planner/garden-planner}/frontend:${IMAGE_TAG:-latest}
+    container_name: garden-planner-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    <<: *logging
+
+  grafana:
+    image: grafana/grafana:10.4-ubuntu
+    container_name: garden-planner-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:?GF_ADMIN_PASSWORD is required}
+      # Must match how users reach Grafana (including sub-path, no trailing slash).
+      # Dev default assumes nginx at :80 proxies /admin/dashboard/ → grafana:3000.
+      # Override with GF_ROOT_URL env var (e.g. https://yourdomain.com/admin/dashboard).
+      GF_SERVER_ROOT_URL: ${GF_ROOT_URL:-http://localhost/admin/dashboard}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: db:5432
+      GF_DATABASE_NAME: ${POSTGRES_DB:-garden}
+      GF_DATABASE_USER: ${POSTGRES_USER:-garden}
+      GF_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      GF_DATABASE_SSL_MODE: disable
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    <<: *logging
 
 volumes:
-  backend_data:
-  frontend_data:
   db_data:
+    name: garden-planner-db-data
+  grafana_data:
+    name: garden-planner-grafana-data
 
 networks:
-  proxy:
-    external: true
+  internal:
+    driver: bridge
+    name: garden-planner-internal

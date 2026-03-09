@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Garden, Plant, SoilData, User } from '../types';
+import { Garden, Notification, Plant, SoilData, SoilHistoryEntry, User } from '../types';
 
 // Check if we're in development mode
 const isDevelopment = import.meta.env.MODE === 'development';
@@ -330,4 +330,60 @@ export const adminAPI = {
       throw error;
     }
   }
+};
+
+// Notification APIs
+export const notificationAPI = {
+  getAll: async (unreadOnly = false): Promise<Notification[]> => {
+    try {
+      const url = unreadOnly ? '/notifications?unread=true' : '/notifications';
+      const response = await api.get(url);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  markRead: async (id: string): Promise<void> => {
+    await api.patch(`/notifications/${id}/read`);
+  },
+
+  markAllRead: async (): Promise<void> => {
+    await api.patch('/notifications/read-all');
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/notifications/${id}`);
+  },
+};
+
+// Soil history for the scroll-wheel calendar
+export const soilHistoryAPI = {
+  getHistory: async (gardenId: string, limit = 90): Promise<SoilHistoryEntry[]> => {
+    try {
+      const response = await api.get(`/gardens/${gardenId}/soil/history?limit=${limit}`);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch {
+      return [];
+    }
+  },
+};
+
+// Plant relationship APIs
+export const relationshipAPI = {
+  getForPlant: async (plantId: string) => {
+    try {
+      const response = await api.get(`/plants/${plantId}/relationships`);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  upsert: async (plantAId: string, plantBId: string, type: string, description = '') => {
+    const response = await api.post('/plants/relationships', {
+      plantAId, plantBId, relationshipType: type, benefitDescription: description,
+    });
+    return response.data;
+  },
 };

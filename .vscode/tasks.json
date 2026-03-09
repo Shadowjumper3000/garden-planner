@@ -2,12 +2,96 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build & Start All (dev)",
+            "label": "Dev — Start (port 80)",
             "type": "shell",
-            "command": "docker compose -f infra/docker-compose.dev.yml up --build",
+            "command": "docker compose --env-file infra/.env.dev up --build",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "detail": "Full dev stack in Docker. Web → http://localhost (port 80) · API direct → http://localhost:8000 · DB → localhost:5432 · Grafana → http://localhost:3000"
+        },
+        {
+            "label": "Dev — Stop",
+            "type": "shell",
+            "command": "docker compose --env-file infra/.env.dev down",
             "problemMatcher": [],
             "group": "build",
-            "detail": "Builds and starts all services in development mode using Docker Compose."
+            "detail": "Stop and remove all dev containers (volumes preserved)."
+        },
+        {
+            "label": "Dev — Rebuild backend only",
+            "type": "shell",
+            "command": "docker compose --env-file infra/.env.dev up --build --no-deps backend",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "Rebuild and restart only the Go backend container."
+        },
+        {
+            "label": "Dev — Rebuild frontend only",
+            "type": "shell",
+            "command": "docker compose --env-file infra/.env.dev up --build --no-deps frontend",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "Rebuild and restart only the nginx frontend container."
+        },
+        {
+            "label": "Dev — Reset DB volume (DESTRUCTIVE)",
+            "type": "shell",
+            "command": "docker compose --env-file infra/.env.dev down && docker volume rm garden-planner-db-data && docker compose --env-file infra/.env.dev up --build",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "⚠ Deletes all DB data then restarts the full stack with a clean database."
+        }
+    ]
+}
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "detail": "Full dev stack in Docker. Web → http://localhost (port 80) · API direct → http://localhost:8000 · DB → localhost:5432 · Grafana → http://localhost:3000"
+        },
+        {
+            "label": "Dev — Stop",
+            "type": "shell",
+            "command": "docker compose down",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "Stop and remove all dev containers (volumes preserved)."
+        },
+        {
+            "label": "Dev — Rebuild backend only",
+            "type": "shell",
+            "command": "docker compose up --build --no-deps backend",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "Rebuild and restart only the Go backend container."
+        },
+        {
+            "label": "Dev — Rebuild frontend only",
+            "type": "shell",
+            "command": "docker compose up --build --no-deps frontend",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "Rebuild and restart only the nginx frontend container."
+        },
+        {
+            "label": "Dev — Reset DB volume (DESTRUCTIVE)",
+            "type": "shell",
+            "command": "docker compose down && docker volume rm garden-planner-db-data && docker compose up --build",
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "⚠ Deletes all DB data then restarts the full stack with a clean database."
         }
     ]
 }
