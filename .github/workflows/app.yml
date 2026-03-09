@@ -101,3 +101,4 @@ jobs:
       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
       ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
       GF_ADMIN_PASSWORD: ${{ secrets.GF_ADMIN_PASSWORD }}
+      DOMAIN: ${{ secrets.DOMAIN }}

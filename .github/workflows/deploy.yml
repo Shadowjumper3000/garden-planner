@@ -70,6 +70,9 @@ on:
         required: false
       GF_ADMIN_PASSWORD:
         required: true
+      DOMAIN:
+        required: true
+        description: "Production domain (e.g. example.com). Used for GF_ROOT_URL and CORS_ALLOW_ORIGINS."
 
 jobs:
   deploy:
@@ -94,12 +97,13 @@ jobs:
           ADMIN_PASSWORD:     ${{ secrets.ADMIN_PASSWORD }}
           ADMIN_NAME:         ${{ secrets.ADMIN_NAME }}
           GF_ADMIN_PASSWORD:  ${{ secrets.GF_ADMIN_PASSWORD }}
+          DOMAIN:             ${{ secrets.DOMAIN }}
         with:
           host:     ${{ secrets.INFRA_HETZNER_HOST }}
           username: ${{ secrets.INFRA_HETZNER_USER }}
           key:      ${{ secrets.INFRA_HETZNER_SSH_KEY }}
           port:     ${{ secrets.INFRA_HETZNER_PORT }}
-          envs:     SERVICES,IMAGE_TAG,RECREATE_VOLUMES,BRANCH,APP_DIR,GH_REPO,INFRA_DEPLOY_GIT_KEY,POSTGRES_PASSWORD,JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,GF_ADMIN_PASSWORD
+          envs:     SERVICES,IMAGE_TAG,RECREATE_VOLUMES,BRANCH,APP_DIR,GH_REPO,INFRA_DEPLOY_GIT_KEY,POSTGRES_PASSWORD,JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,GF_ADMIN_PASSWORD,DOMAIN
           script: |
             set -euo pipefail
 
@@ -152,6 +156,8 @@ jobs:
             GF_DATABASE_NAME=garden
             GF_DATABASE_USER=garden
             GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+            GF_ROOT_URL=https://${DOMAIN}/admin/dashboard
+            CORS_ALLOW_ORIGINS=https://${DOMAIN}
             IMAGE_TAG=${IMAGE_TAG}
             GITHUB_REPOSITORY=${GH_REPO}
             EOF
