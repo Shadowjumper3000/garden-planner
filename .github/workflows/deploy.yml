@@ -29,11 +29,7 @@ on:
         default: false
         description: "Drop and recreate all named data volumes before starting. WARNING: destroys all persistent data."
 
-      branch:
-        required: false
-        type: string
-        default: ""
-        description: "Branch to deploy. Defaults to main."
+      # branch input removed to avoid YAML parsing mismatch; deploys default 'main'
 
       app_dir:
         required: false
@@ -80,7 +76,7 @@ jobs:
         env:
           SERVICES:             ${{ inputs.services }}
           RECREATE_VOLUMES:     ${{ inputs.recreate_volumes }}
-          BRANCH:               ${{ inputs.branch || 'main' }}
+          BRANCH:               'main'
           APP_DIR:              ${{ inputs.app_dir }}
           GH_REPO:              ${{ github.repository }}
           INFRA_DEPLOY_GIT_KEY: ${{ secrets.INFRA_DEPLOY_GIT_KEY }}
