@@ -18,14 +18,6 @@ on:
         options:
           - "false"
           - "true"
-      recreate_volumes:
-        description: "Drop data volumes before deploy (DESTRUCTIVE)"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
 
 permissions:
   contents: read
@@ -39,7 +31,7 @@ jobs:
     secrets:
       INFRA_HETZNER_HOST: ${{ secrets.INFRA_HETZNER_HOST }}
       INFRA_HETZNER_USER: ${{ secrets.INFRA_HETZNER_USER }}
-      INFRA_HETZNER_SSH_KEY: ${{ secrets.INFRA_HETZNER_SSH_KEY }}
+      INFRA_HETZNER_SSH_KEY: ${{ secrets.INFRA_HETZNER_KEY }}
       INFRA_HETZNER_PORT: ${{ secrets.INFRA_HETZNER_PORT }}
       INFRA_DEPLOY_GIT_KEY: ${{ secrets.INFRA_DEPLOY_GIT_KEY }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
